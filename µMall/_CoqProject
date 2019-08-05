@@ -1,0 +1,16 @@
+-I .
+-R . muMall
+
+AsciiOrder.v
+StringOrder.v
+StringUtils.v
+Utils.v
+Defs.v
+Debruijn.v
+Address.v
+Occurrences.v
+ODerivations.v
+Suboccurrences.v
+Subformulas.v
+FLSuboccurrences.v
+FLSubformulas.v
