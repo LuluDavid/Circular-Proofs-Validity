@@ -1,4 +1,4 @@
-Require Import Defs Debruijn Address StringUtils Utils.
+Require Export Defs Debruijn Address StringUtils Utils Ascii.
 Require DecimalString.
 Import ListNotations.
 Require Import Arith.
@@ -16,7 +16,8 @@ Inductive Occurrence :=
 Notation "{ F , A }" := (Occ F A).
 
 Class OBSubst (A : Type) := obsubst : nat -> Occurrence -> A -> A.
-Arguments bsubst {_} {_} _ _ !_.
+Arguments obsubst {_} {_} _ _ !_.
+Hint Extern 1 (OBSubst _ _ _) => cbn.
 
 Instance obsubst_list {A}`{OBSubst A} : OBSubst (list A) :=
  fun n t => List.map (obsubst n t).
@@ -29,7 +30,7 @@ Definition print_occurrence (o:Occurrence) :=
 
 Local Open Scope eqb_scope.
 
-(* Redefining eqb, level, fvars, bsubst. 
+(* Redefining eqb, level, bsubst. 
     bsubst is not anymore instance because we substitute occurrences in occurrences here *)
 
 Instance occ_eqb : Eqb Occurrence :=
@@ -39,16 +40,13 @@ Instance occ_eqb : Eqb Occurrence :=
 Instance occ_level : Level Occurrence :=
   fix occ_level o := let '{ F, A} := o in level F.
 
-Instance occ_fvars : FVars Occurrence :=
-  fix occ_fvars o := let '{ F, A} := o in fvars F.
-
 Instance occ_bsubst: BSubst Occurrence :=
   fix occ_obsubst n f o := 
-  let '{ F, A} := o in ({  (bsubst n f F), A }).
+  let '{ F, A} := o in ({  F[[ %n := f ]], A }).
   
 Instance occ_obsubst: OBSubst Occurrence :=
   fix occ_obsubst n o' o := 
-  let '{ F, A} := o in (let '{ G, B} := o in {  (bsubst n G F), A }).
+  let '{ F, A} := o in (let '{ G, B} := o in {  F[[ %n := G ]], A }).
 
 Instance: EqbSpec Occurrence.
 Proof.
@@ -110,11 +108,8 @@ Proof.
   split; try apply equiv_refl; try apply equiv_sym; try apply equiv_trans.
 Qed.
 
-Definition list_occ_forget(lo:list Occurrence): list formula := map occ_forget lo.
-
 Definition disjoint_set_occ (l1 l2: list Occurrence) : Prop := forall (o1 o2: Occurrence),
   In o1 l1 -> In o2 l2 -> disjoint (occ_addr o1)(occ_addr o2).
-
 
 
 (** ADAPTATION OF DERIVATIONS FOR OCCURRENCES **)
@@ -130,17 +125,9 @@ Proof.
 Qed.
 (** Sequent *)
 
-Fixpoint ocontext_forget Γ : list formula :=
-  match Γ with
-  | [] => []
-  | o::Γ' => let '{ F, a} := o in F :: (ocontext_forget Γ')
-  end.
+Fixpoint ocontext_forget Γ : list formula := map occ_forget Γ.
 
-Fixpoint ocontext_addr Γ : list address :=
-  match Γ with
-  | [] => []
-  | o::Γ' => let '{ F, a} := o in a :: (ocontext_addr Γ')
-  end.
+Fixpoint ocontext_addr Γ : list address := map occ_addr Γ.
 
 Inductive osequent :=
 | SeqO : ocontext -> osequent.
@@ -151,11 +138,6 @@ Fixpoint oseq_forget (s:osequent): sequent := let '(⊢ Γ) := s in (⊦ (oconte
 
 Fixpoint oseq_addr (s:osequent): list address := let '(⊢ Γ) := s in ocontext_addr Γ.
 
-Fixpoint getAddresses Γ : list address :=
-  match Γ with
-  | [] => []
-  | o::Γ' => let '{ F, a} := o in a :: (getAddresses Γ')
-  end.
 
 Local Open Scope string_scope.
 
@@ -164,69 +146,38 @@ Definition print_oseq '(⊢ Γ) :=
 
 Instance oseq_level : Level osequent :=
  fun '(⊢ Γ ) => level Γ.
-
-Instance oseq_fvars : FVars osequent :=
- fun '(⊢ Γ ) => fvars Γ.
  
 Instance bsubst_seq : BSubst osequent :=
- fun n u '(⊢ Γ ) => (⊢ (bsubst n u Γ) ).
+ fun n u '(⊢ Γ ) => (⊢ (Γ[[ %n := u ]]) ).
 
 Instance obsubst_seq : OBSubst osequent :=
  fun n o '(⊢ Γ ) => (⊢ (obsubst n o Γ) ).
- 
+
 Local Open Scope eqb_scope.
 
 Instance oseq_eqb : Eqb osequent :=
  fun '(⊢ Γ1) '(⊢ Γ2) => (Γ1 =? Γ2).
-
+ 
 Instance: EqbSpec osequent.
 Proof.
   intros [] []. cbn. repeat (case eqbspec; try cons).
 Qed.
 
 (* A prop asserting that 2 sequents have the same formulas in the same order *)
-Inductive list_occ_equiv : list Occurrence -> list Occurrence -> Prop :=
-  | EqEmpty: list_occ_equiv [] []
-  | EqCons (o1 o2: Occurrence)(Γ1 Γ2:list Occurrence): 
-    equiv o1 o2 
-    -> list_occ_equiv Γ1 Γ2 
-    -> list_occ_equiv (o1::Γ1) (o2::Γ2). 
 
-Fixpoint list_occ_equivb (Γ1 Γ2: list Occurrence) : bool :=
-  match Γ1, Γ2 with
-  | [], [] => true
-  | (o1::Γ1'), (o2::Γ2') => (equivb o1 o2) && (list_occ_equivb Γ1' Γ2')
-  | _, _ => false (* maybe deal with duplicate formulas ? *)
-  end.
-
-Lemma list_occ_equiv_is_list_occ_equivb: forall (l1 l2: list Occurrence), 
-  list_occ_equiv l1 l2 <-> list_occ_equivb l1 l2 = true.
-Proof.
-  intros; split; intros.
-  - induction H; trivial.
-    simpl. apply andb_true_iff. split.
-    -- apply equiv_is_equivb; assumption.
-    -- assumption.
-  - generalize dependent l2. induction l1 as [| o1 l1' IH1]; induction l2 as [| o2 l2']; 
-                                                try constructor; try (intros; discriminate H);
-    intros; simpl in H; apply andb_true_iff in H; destruct H.
-      + apply equiv_is_equivb in H; assumption.
-      + apply IH1; assumption.
-Qed.
-
-Definition oseq_equiv (s1 s2: osequent) : Prop := 
-  let '(⊢ Γ1 ) := s1 in (let '(⊢ Γ2 ) := s2 in list_occ_equiv Γ1 Γ2 ).
+Definition oseq_equiv (s1 s2: osequent) : Prop := (oseq_forget s1) = (oseq_forget s2).
   
-Definition oseq_equivb (s1 s2: osequent) : bool :=
-  let '(⊢ Γ1 ) := s1 in (let '(⊢ Γ2 ) := s2 in list_occ_equivb Γ1 Γ2 ).
+Definition oseq_equivb (s1 s2: osequent) : bool := (oseq_forget s1) =? (oseq_forget s2).
 
 Lemma oseq_equiv_is_oseq_equivb: forall (s1 s2: osequent), 
   oseq_equiv s1 s2 <-> oseq_equivb s1 s2 = true.
 Proof.
-  intros; destruct s1; destruct s2; simpl; apply list_occ_equiv_is_list_occ_equivb.
+  split;
+  unfold oseq_equiv, oseq_equivb;
+  apply Utils.eqb_eq.
 Qed.
 
-Definition octx_example := [{ ($((% 0)&(!#(% 0)))), [i;l;r] };{ (€($((% 2)&(!#(% 1))))), [] }].
+Definition octx_example := [{ (µ((% 0)&(!#(% 0)))), [i;l;r] };{ (ν(µ((% 1)&(!#(% 0))))), [] }].
 
 Compute level ctx_example.
 
@@ -242,7 +193,7 @@ Inductive orule_kind :=
   | And_mult
   | TopR| BotR| OneR
   | Mu | Nu
-  | BackEdge (S:osequent)
+  | BackEdge (n:nat)
   .
 
 Definition print_orule (r:orule_kind) :=
@@ -260,8 +211,8 @@ Definition print_orule (r:orule_kind) :=
   | And_mult => "(⊗)"
   | Mu => "(µ)"
   | Nu => "(ν)"
-  | BackEdge s => "(BackEdge " ++print_oseq s++")" (* For infinite proofs, we won't mention this rule in
-                                                                                              the Valid Prop *)
+  | BackEdge n => "(BackEdge " ++ (String (ascii_of_nat (48 + n)) "") ++ ")" 
+    (* Only works for numbers between 0 and 9 *)
   end.
 
 Instance orule_eqb : Eqb orule_kind :=
@@ -270,7 +221,7 @@ Instance orule_eqb : Eqb orule_kind :=
   | Ax, Ax | Cut, Cut | Ex, Ex | TopR, TopR | BotR, BotR | OneR, OneR | Mu, Mu | Nu, Nu
   | Or_add_l, Or_add_l | Or_add_r, Or_add_r | Or_mult, Or_mult | And_add, And_add 
   | And_mult, And_mult => true
-  | BackEdge Se, BackEdge Se' => Se=?Se'
+  | BackEdge n, BackEdge n' => (n =? n')
   | _, _ => false
  end.
 
@@ -282,7 +233,7 @@ Proof.
 Qed.
 
 Inductive oderivation :=
-  | ORule : list osequent -> orule_kind -> osequent -> list oderivation -> oderivation.
+  | ORule : list (nat*osequent) -> orule_kind -> osequent -> list oderivation -> oderivation.
 
 (** Returns the current sequent/bottom sequent *)
 
@@ -305,16 +256,33 @@ Instance level_oderivation : Level oderivation :=
   let '(ORule _ _ s ds) := d in
   list_max (level s :: List.map level_oderivation ds).
 
-Instance fvars_oderivation : FVars oderivation :=
- fix fvars_oderivation d :=
-  let '(ORule _ _ s ds) := d in
-  Names.unions [fvars s; Names.unionmap fvars_oderivation ds].
+Fixpoint combine_eq_length (l l' : list oderivation) := 
+      match ((length l) =? (length l')) with
+        | true => Some (combine l l')
+        | false => None
+      end.
 
+Fixpoint AndList (l:list bool) :=
+  match l with
+  | [] => true
+  | x::l' => x && AndList l'
+  end.
 
+(* Instance eqb_oderivation : Eqb oderivation :=
+  fix eqb_oderivation d1 d2 :=
+    let '(ORule ls1 R1 s1 ld1) := d1 in 
+    let '(ORule ls2 R2 s2 ld2) := d2 in 
+     (ls1 =? ls2) && (R1 =? R2) && (s1 =? s2) && 
+     let lco := (combine_eq_length ld1 ld2) in
+     match lco with
+     | Some l' => AndList (map (prod_curry eqb_oderivation) l')
+     | None   => false
+     end. *)
+     
 Instance bsubst_oderiv : BSubst oderivation :=
- fix bsubst_oderiv n o d :=
+ fix bsubst_oderiv n f d :=
  let '(ORule ls R s ds) := d in
- ORule ls R (bsubst n o s) (map (bsubst_oderiv n o) ds).
+ ORule ls R (s [[ %n := f ]]) (map (bsubst_oderiv n f) ds).
  
 Instance obsubst_oderiv : OBSubst oderivation :=
  fix obsubst_oderiv n o d :=
@@ -340,10 +308,6 @@ Qed.
 Definition OClaim d s := oclaim d = s.
 Arguments OClaim _ _ /.
 Hint Extern 1 (OClaim _ _) => cbn.
-
-Definition OClaim' d s := oclaim' d = s.
-Arguments OClaim' _ _ /.
-Hint Extern 1 (OClaim' _ _) => cbn.
 
 Definition Backedges d ls := backedges d = ls.
 Arguments Backedges _ _ /.

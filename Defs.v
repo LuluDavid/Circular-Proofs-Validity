@@ -1,9 +1,3 @@
-
-(** * Initial definitions for Natural Deduction *)
-
-(** The NatDed development, Pierre Letouzey, 2019.
-    This file is released under the CC0 License, see the LICENSE file *)
-
 Require Export Setoid Morphisms RelationClasses Arith Omega Bool String
                MSetRBT StringOrder List Utils.
 Require DecimalString.
@@ -15,16 +9,9 @@ Local Open Scope eqb_scope.
 
 (** Names *)
 
-(** Names are coded as string. They will be used both for
-    variables and function symbols and predicate symbols.
-
-    During proofs, these strings may be arbitrary. In case of
-    formula parsing, we'll use the usual syntactic conventions
-    for identifiers : a letter first, then letters or digits or "_".
-    Some symbols will also be accepted as function or predicate
-    symbols, such as "+" "*" "=" "∈". In fact, pretty much
-    anything that doesn't contain the parenthesis characters
-    or the comma. *)
+(** Names are coded as string. They will be used for
+    free variables, as we do not consider precise predicate 
+    or function symbols in this library *)
 
 Definition name := string.
 Bind Scope string_scope with name.
@@ -71,22 +58,11 @@ Arguments Names.union !_ !_.
 Arguments Names.inter !_ !_.
 Arguments Names.diff !_ !_.
 
-(** [fresh names] : gives a new name not in the set [names]. *)
-
-Fixpoint fresh_loop (names:Names.t) (id:string) n : variable :=
-  match n with
-  | O => id
-  | S n => if negb (Names.mem id names) then id
-           else fresh_loop names (id++"x") n
-  end.
-
-Definition fresh names := fresh_loop names "x" (Names.cardinal names).
-
 (** Misc types : operators, quantificators *)
 
 Inductive op := Or_add | Or_mult | And_add | And_mult.
 
-Inductive quant := µ | ν.
+Inductive quant := mu | nu.
 
 Instance op_eqb : Eqb op :=
  fun o1 o2 =>
@@ -98,7 +74,7 @@ Instance op_eqb : Eqb op :=
 Instance quant_eqb : Eqb quant :=
  fun q1 q2 =>
   match q1, q2 with
-  | µ, µ| ν, ν => true
+  | mu, mu| nu, nu => true
   | _, _ => false
   end.
 
@@ -112,8 +88,8 @@ Definition pr_op o :=
 
 Definition pr_quant q :=
   match q with
-  | µ => "µ"
-  | ν => "ν"
+  | mu => "µ"
+  | nu => "ν"
   end.
 
 Instance : EqbSpec op.

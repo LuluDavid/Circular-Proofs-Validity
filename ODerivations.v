@@ -1,29 +1,64 @@
-Require Import Defs.
-Require Import StringUtils.
+Require Import Defs Debruijn Occurrences Address.
+Require Import StringUtils Datatypes.
 Require DecimalString.
 Import ListNotations.
 Require Import Arith.
 Import Bool.
-Require Import Defs Debruijn Occurrences Address.
-Local Open Scope list_scope.
-Local Open Scope eqb_scope.
 
 (** UP TO THIS POINT, EVERYTHING IS WELL DEFINED **)
 
-(* A Fixpoint for validity. Complicated to describe the exchange rule because we require a boolean  
-  permutation indicator for two lists. *)
+(* Return the optional derivation rooted at node of address a *)
 
-Fixpoint InOb (s : osequent) (l : list osequent) : bool :=
+Fixpoint subderiv (d:oderivation)(a:address): option oderivation :=
+  let '(ORule ls R s ld) := d in
+  match a, ld with
+  | [], _               => Some d
+  | i::a', [d']        => subderiv d' a'  
+  | l::a', [d1;d2] => subderiv d1 a'
+  | r::a', [d1;d2] => subderiv d2 a'
+  | _, _ => None
+  end.
+
+Local Open Scope string_scope.
+
+Definition Subderiv_example: oderivation := 
+  ORule [] And_mult (⊢[{ (//"A"#~//"A")⊗!, [] }]) 
+              [
+              ORule [] Or_mult (⊢[{ //"A"#~//"A", [l] }]) [
+                                                                            ORule [] Ax (⊢[{ //"A", [l;l] }; { ~//"A", [r;l] }]) []
+                                                                            ];
+              ORule [] OneR (⊢[{ !, [r] }]) []
+              ].
+
+(*
+  --------------------------------------------------------- (Ax),(1)
+   [] ⊢{ //A, [l,l] } ,{ ¬//A, [l,r] }         [] ⊢{ !, [r] }
+  --------------------------------------------------------- (#)
+   [] ⊢{ (//A#¬//A), [l] }         [] ⊢{ !, [r] }
+  --------------------------------------------------------- (⊗)
+                      [] ⊢{ (//A#¬//A)⊗!, [] }
+  *)
+  
+Compute subderiv Subderiv_example [l;i].
+
+Local Open Scope list_scope.
+Local Open Scope eqb_scope.
+
+(* Boolean versions of In *)
+
+Fixpoint InOSequent (s : osequent) (l : list osequent) : bool :=
     match l with
        | [] => false
-       | s' :: m => (s' =? s) || (InOb s m)
+       | s' :: m => (s' =? s) || (InOSequent s m)
      end.
 
-Fixpoint InOb' (s : Occurrence) (l : ocontext) : bool :=
+Fixpoint InOSequent' (s : Occurrence) (l : ocontext) : bool :=
     match l with
        | [] => false
-       | s' :: m => (s' =? s) || (InOb' s m)
+       | s' :: m => (s' =? s) || (InOSequent' s m)
      end.
+
+(* Same lists with 2 switched occurrences for the exchange rule *)
 
 Fixpoint list_permut (l1 l2: list Occurrence): bool :=
   match l1, l2 with
@@ -37,52 +72,98 @@ Fixpoint list_permut (l1 l2: list Occurrence): bool :=
   | _, _ => false
   end.
 
-Definition ovalid_deriv_step '(ORule ls R s ld) :=
-  match ls, R, s, List.map oclaim ld, List.map backedges ld with
-  | l1, Ax, (⊢ [A;A']), [], _ => equivb A' (occ_dual A) (* Nouvelle règle d'axiome *)
-  | _, TopR,  (⊢ {⊤, _}::Γ ), _, _ => true 
-  | _, OneR,  (⊢ [{! ,_}]), _, _ => true
-  | ls1, BotR,  (⊢ {⊥, _}::Γ), [s], [ls2] => (s =? (⊢ Γ)) &&& ((ls2 =? ls1) ||| (ls2 =? s::ls1))
-  | ls1, Or_add_l, (⊢ {(F⊕G), a}::Γ), [s], [ls2] => 
-                                        (s =? (⊢ {F, (l::a)}::Γ)) &&& ((ls2 =? ls1) ||| (ls2 =? s::ls1))
-  | ls1, Or_add_r, (⊢ {(F⊕G), a}::Γ), [s], [ls2] => (s =? (⊢ {G, (r::a)}::Γ))  
-                                                                            &&& ((ls2 =? ls1) ||| (ls2 =? s::ls1))
-  | ls1, Or_mult,  (⊢ {(F#G),a}::Γ), [s], [ls2] => (s =? (⊢{F, (l::a)}::{G, (r::a)}::Γ)) 
-                                                                            &&& ((ls2 =? ls1) ||| (ls2 =? s::ls1))
-  | ls1, And_add,  (⊢ {(F&G),a}::Γ), [(⊢ {F',a1}::Γ1);(⊢ {G',a2}::Γ2)], [ls2;ls3] 
-                            => (F =? F') &&& (G =? G') &&& (a1 =? l::a) &&& (a2 =? r::a) 
-                                  &&& (Γ1 =? Γ) &&& (Γ2 =? Γ) 
-                                  &&& ((ls2 =? ls1) ||| (ls2 =? (s::ls1)))
-                                  &&& ((ls3 =? ls1) ||| (ls3 =? (s::ls1)))
-  | ls1, And_mult,  (⊢ {(F⊗G),a}::Γ), [(⊢ {F',a1}::Γ1);(⊢ {G',a2}::Γ2)], [ls2;ls3]
-                            => (F =? F') &&& (G =? G') &&& (a1 =? l::a) &&& (a2 =? r::a) &&& ((app Γ1 Γ2) =? Γ) 
-                                  &&& ((ls2 =? ls1) ||| (ls2 =? (s::ls1)))
-                                  &&& ((ls3 =? ls1) ||| (ls3 =? (s::ls1)))
-  | ls1, Cut,   (⊢  Γ), [(⊢ A:: Γ1);(⊢ B:: Γ2)], [ls2;ls3]
-                            => ( Γ =? Γ1 ++  Γ2 ) &&& (B =? (occ_dual A))  
-                                  &&& disjoint_addr_listb (occ_addr A)(ocontext_addr Γ1)
-                                  &&& disjoint_addr_listb (occ_addr B)(ocontext_addr Γ2)
-                                  &&& ((ls2 =? ls1) ||| (ls2 =? (s::ls1)))
-                                  &&& ((ls3 =? ls1) ||| (ls3 =? (s::ls1)))
-  | ls1, Ex,  (⊢ Γ), [(⊢Γ')], [ls2] => (list_permut Γ Γ') &&& ((ls2 =? ls1) ||| (ls2 =? (s::ls1)))
-  | ls1, Mu, (⊢ {($ F),a}::Γ), [(⊢{G,a'}::Γ')], [ls2] 
-                            => (G =? bsubst 0 ($ F) F) &&& (Γ =? Γ') &&& (a' =? i::a)
-                                  &&& ((ls2 =? ls1) ||| (ls2 =? s::ls1))
-  | ls1, Nu, (⊢ {(€ F),a}::Γ), [(⊢{G,a'}::Γ')], [ls2] 
-                            => (G =? bsubst 0 (€ F) F) &&& (Γ =? Γ') &&& (a' =? i::a)
-                                  &&& ((ls2 =? ls1) ||| (ls2 =? s::ls1))
-  | ls, BackEdge s', s, [], _ => (InOb s' ls) &&& (oseq_equivb s s')
-  | _,_,_,_,_ => false
+(* Get, Lift and Eqb for the list of backedgeables sequents *)
+
+Fixpoint get (n:nat)(l:list (nat*osequent)): osequent :=
+  match l with
+  | [] => ⊢ []
+  | (n', s)::ls => if (n =? n') then s else get n ls
   end.
 
+Fixpoint lift (l:list (nat*osequent)): list (nat*osequent) :=
+  match l with
+  | [] => []
+  | (j, F)::ls => (j+1, F)::(lift ls)
+  end.
+
+Instance ls_eqb : Eqb (nat*osequent) :=
+  fix ls_eqb ls1 ls2 :=
+    let (n1, s1) := ls1 in (let (n2, s2) := ls2 in (n1 =? n2) && (s1 =? s2)).
+
+(* Boolean version of valid inference structure for one step *)
+
+Definition ovalid_deriv_step '(ORule ls R s ld) :=
+  match ls, R, s, List.map oclaim ld, List.map backedges ld with
+  | ls1, Ax, (⊢ A::A'::Γ ), [], _                => equivb A' (occ_dual A)
+  | _, TopR,  (⊢ {⊤, _}::Γ ), _, _           => true 
+  | _, OneR,  (⊢ [{! ,_}]), _, _               => true
+  | ls1, BotR,  (⊢ {⊥, _}::Γ), [s], [ls2]  => (s =? (⊢ Γ)) 
+                                                                       &&& 
+                                                                  ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s):: (lift ls1)))
+
+  | ls1, Or_add_l, (⊢ {(F⊕G), a}::Γ), [s], [ls2] 
+                                                            => (s =? (⊢ {F, (l::a)}::Γ)) 
+                                                                      &&& 
+                                                                 ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
+
+  | ls1, Or_add_r, (⊢ { F⊕G, a }::Γ), [s], [ls2] 
+                                                            => (s =? (⊢ {G, (r::a)}::Γ))  
+                                                                      &&& 
+                                                                 ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
+
+  | ls1, Or_mult,  (⊢ { F#G, a }::Γ), [s], [ls2] 
+                                                            => (s =? (⊢{F, (l::a)}::{G, (r::a)}::Γ)) 
+                                                                     &&& 
+                                                                ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
+
+  | ls1, And_add,  (⊢ { F&G, a }::Γ), [(⊢ {F',a1}::Γ1);(⊢ {G',a2}::Γ2)], [ls2;ls3] 
+                                                          => (F =? F') &&& (G =? G') 
+                                                                              &&& (a1 =? l::a) &&& (a2 =? r::a) 
+                                                                              &&& (Γ1 =? Γ) &&& (Γ2 =? Γ) 
+                                                                              &&& ((ls2 =? (lift ls1)) ||| (ls2 =? ((1, s) :: (lift ls1))))
+                                                                              &&& ((ls3 =? (lift ls1)) ||| (ls3 =? ((1, s) :: (lift ls1))))
+
+  | ls1, And_mult,  (⊢ { F⊗G, a }::Γ), [(⊢ {F',a1}::Γ1);(⊢ {G',a2}::Γ2)], [ls2;ls3]
+                                                          => (F =? F') &&& (G =? G') 
+                                                                              &&& (a1 =? l::a) &&& (a2 =? r::a) 
+                                                                              &&& ((app Γ1 Γ2) =? Γ) 
+                                                                              &&& ((ls2 =? (lift ls1)) ||| (ls2 =? ((1, s) :: (lift ls1))))
+                                                                              &&& ((ls3 =? (lift ls1)) ||| (ls3 =? ((1, s) :: (lift ls1))))
+
+  | ls1, Cut,   (⊢  Γ), [(⊢ A:: Γ1);(⊢ B:: Γ2)], [ls2;ls3]
+                                                          => ( Γ =? Γ1 ++  Γ2 ) &&& (B =? (occ_dual A))  
+                                                                                            &&& disjoint_addr_listb (occ_addr A)(ocontext_addr Γ1)
+                                                                                            &&& disjoint_addr_listb (occ_addr B)(ocontext_addr Γ2)
+                                                                                            &&& ((ls2 =? (lift ls1)) ||| (ls2 =? ((1,s) :: (lift ls1))))
+                                                                                            &&& ((ls3 =? (lift ls1)) ||| (ls3 =? ((1,s) :: (lift ls1))))
+
+  | ls1, Ex,  (⊢ Γ), [(⊢Γ')], [ls2]         => (list_permut Γ Γ') 
+                                                                      &&& 
+                                                              ((ls2 =? (lift ls1)) ||| (ls2 =? ((1, s) :: (lift ls1))))
+
+  | ls1, Mu, (⊢ { µ F, a }::Γ), [(⊢{G,a'}::Γ')], [ls2] 
+                                                        => (G =? (F[[ %0 := µ F ]]) ) &&& (Γ =? Γ') &&& (a' =? i::a)
+                                                                                        &&& 
+                                                             ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
+
+  | ls1, Nu, (⊢ { ν F, a }::Γ), [(⊢{G,a'}::Γ')], [ls2] 
+                                                       => (G =? (F[[ %0 := ν F ]])) &&& (Γ =? Γ') &&& (a' =? i::a)
+                                                                                        &&& 
+                                                            ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
+
+  | ls, BackEdge n, s, [], _ => match list_assoc n ls with
+                                                | None => false
+                                                | Some s' => oseq_equivb s s'
+                                                end
+  | _,_,_,_,_ => false
+  end.
 
 Fixpoint ovalid_deriv d :=
   ovalid_deriv_step d &&&
    (let '(ORule _ _ _ ld) := d in
     List.forallb (ovalid_deriv) ld).
 
-
-
+Compute ovalid_deriv_step Subderiv_example.
 
 Lemma oderivation_ind' (P: oderivation -> Prop) :
   (forall ls r s ds, Forall P ds -> P (ORule ls r s ds)) ->
@@ -100,8 +181,8 @@ Qed.
 Local Open Scope string_scope.
 
 Definition oderiv_example :=
-  ORule [] Or_mult (⊢[{ (//"A"#(dual (//"A"))), [r] }]) [ORule [] Ax (⊢[{ //"A", [l;r] }; {dual (//"A"), [r;r]}]) []].
- Print deriv_example.
+  ORule [] Or_mult (⊢[{ (//"A"#(dual (//"A"))), [r] }]) [ORule [] Ax (⊢[{ //"A", [l;r] }; {dual (//"A"), [r;r]}]) [] ].
+ Print oderiv_example.
 Compute 
   obsubst 0 ({//"B", []})%form oderiv_example.
   
@@ -114,7 +195,6 @@ Compute
   *)
   
 Compute ovalid_deriv oderiv_example.
-(** Some examples of derivations *)
 
 (** 
 Claim d s => d's conclusion sequent is s. It means:
@@ -129,35 +209,27 @@ Claim d s => d's conclusion sequent is s. It means:
 
 (* Adds the sequent s in the list of back-edgeable sequents of derivation d *)
 Definition app_oderiv (s:osequent) (d:oderivation) := 
-  let '(ORule ls R s' ds) := d in (ORule (s::ls) R s' ds).
+  let '(ORule ls R s' ds) := d in (ORule ((1, s)::ls) R s' ds).
 
-(* osequent s in ls up to renaming 
-    Necessary to define renamings aside in Renaming.v => maybe not because our addresses are already 
-    disjoint by construction.
-    Or just say that there exists a sequent s' in ls containing all the FORMULAS of the current sequent s
-    with different addresses ?
-*)
+Local Open Scope eqb_scope.
 
-
-
-(* Returns the sequent equal to s up to renaming, if not found, returns the empty sequent 
-    (the only unbackedgeable sequent) *) 
-Fixpoint UpTRSeq (s:osequent)(ls:list osequent): osequent :=
-  match ls with
-  | [] => (⊢ [])
-  | s'::ls' => match (oseq_equivb s s') with
-                   | true => s'
-                   | false => (UpTRSeq s' ls') 
-                   end
+Fixpoint count_occ' (l : list Occurrence) (x : formula) : nat := 
+  match l with
+  | [] => 0
+  | { y, a } :: l' => if (x =? y) then 1 + (count_occ' l' x) else (count_occ' l' x)
   end.
 
-
+Local Open Scope nat_scope.
+ 
 Inductive OValid : oderivation -> Prop :=
 
   (** THE "UNKEEPING" VERSION OF THE RULES **) 
   
- | V_Ax Γ A ls a a': In {A, a} Γ 
-                                -> In { dual A, a' } Γ 
+ | V_Ax_Var Γ v ls: 2 <= count_occ' Γ (Var v)
+                                 -> OValid (ORule ls Ax (⊢ Γ) [])
+ | V_Ax Γ A ls a a': A <> dual A 
+                                -> In {A, a} Γ 
+                                -> In { dual A, a' } Γ
                                 -> OValid (ORule ls Ax (⊢ Γ) [])
  | V_Tr Γ ls a: In {⊤, a} Γ 
                        -> OValid (ORule ls TopR (⊢ Γ) [])
@@ -196,85 +268,85 @@ Inductive OValid : oderivation -> Prop :=
                             -> OValid (ORule ls Ex (⊢app Γ1 (F::G::Γ2)) [d])
  | V_Mu d F Γ ls a :
                             OValid d 
-                            -> OClaim d (⊢ { bsubst 0 ($ F) F, i::a }::Γ) 
-                            -> OValid (ORule ls Mu (⊢ { ($ F), a }::Γ) [d])
+                            -> OClaim d (⊢ { F[[ %0 := µ F ]], i::a }::Γ) 
+                            -> OValid (ORule ls Mu (⊢ { (µ F), a }::Γ) [d])
  | V_Nu d F Γ ls a :
                             OValid d 
-                            -> OClaim d (⊢ { bsubst 0 (€ F) F, i::a}::Γ) 
-                            -> OValid (ORule ls Nu (⊢ { (€ F), a }::Γ) [d])
+                            -> OClaim d (⊢ {F[[ %0 := ν F ]], i::a}::Γ) 
+                            -> OValid (ORule ls Nu (⊢ { (ν F), a }::Γ) [d])
                       
  (** THE "KEEPING" VERSION OF THE RULES **)
  
  | V_Bot' d Γ ls a: OValid d
                                 ->  OClaim d (⊢Γ) 
-                                -> Backedges d ((⊢{⊥, a}::Γ) :: ls)
+                                -> Backedges d ( (1, ⊢{⊥, a}::Γ) :: lift ls)
                                 -> OValid (ORule ls BotR (⊢{⊥, a}::Γ) [d])
   | V_Or_add_l' d F G Γ a ls: 
                              OValid d 
                              -> OClaim d (⊢{F,l::a}::Γ) 
-                             -> Backedges d ((⊢{ F⊕G, a }::Γ) :: ls)
+                             -> Backedges d ( (1, ⊢{ F⊕G, a }::Γ) :: lift ls)
                              -> OValid (ORule ls Or_add_l (⊢{ F⊕G, a }::Γ) [d])
  | V_Or_add_r' d F G Γ a ls: 
                              OValid d 
                              -> OClaim d (⊢{G,r::a}::Γ) 
-                             -> Backedges d ((⊢{ F⊕G, a }::Γ) :: ls)
+                             -> Backedges d ( (1, ⊢{ F⊕G, a }::Γ) :: lift ls)
                              -> OValid (ORule ls Or_add_l (⊢{ F⊕G, a }::Γ) [d])
  | V_Or_mult' d F G Γ a ls :
                             OValid d
                             -> OClaim d (⊢{ F, l::a } :: { G, r::a } :: Γ) 
-                            -> Backedges d ((⊢{ F#G, a }::Γ) :: ls)
+                            -> Backedges d ( (1, ⊢{ F#G, a }::Γ) :: lift ls)
                             -> OValid (ORule ls Or_mult (⊢ { F#G, a}::Γ) [d])
  | V_And_add' d1 d2 F G Γ a ls :
                             OValid d1 -> OValid d2 
                             -> OClaim d1 (⊢ { F, l::a }::Γ) -> OClaim d2 (⊢ { G, r::a }::Γ) 
-                            -> Backedges d1 ((⊢{ F&G, a }::Γ) :: ls)
-                            -> Backedges d2 ((⊢{ F&G, a }::Γ) :: ls)
+                            -> Backedges d1 ( (1, ⊢{ F&G, a }::Γ) :: lift ls)
+                            -> Backedges d2 ( (1, ⊢{ F&G, a }::Γ) :: lift ls)
                             -> OValid (ORule ls And_add (⊢ { F&G, a } :: Γ) [d1;d2])
  | V_And_mult' d1 d2 F G Γ1 Γ2 a ls :
                             OValid d1 -> OValid d2 
                             -> OClaim d1 (⊢ { F, l::a } :: Γ1) -> OClaim d2 (⊢ { G, r::a } :: Γ2) 
-                            -> Backedges d1 ((⊢{ F⊗G, a }::(app Γ1 Γ2)) :: ls)
-                            -> Backedges d2 ((⊢{ F⊗G, a }::(app Γ1 Γ2)) :: ls)
+                            -> Backedges d1 ( (1, ⊢{ F⊗G, a }::(app Γ1 Γ2)) :: lift ls)
+                            -> Backedges d2 ( (1, ⊢{ F⊗G, a }::(app Γ1 Γ2)) :: lift ls)
                             -> OValid (ORule ls And_mult (⊢ { F⊗G, a } :: (app Γ1 Γ2)) [d1;d2])
  | V_Cut' d1 d2 A Γ1 Γ2 ls a1 a2 :
                             OValid d1 -> OValid d2 
                              -> OClaim d1 (⊢ { dual A, a1}::Γ1) -> OClaim d2 (⊢ { A, a2 }::Γ2) 
                              -> disjoint_addr_list a1 (ocontext_addr Γ1) -> disjoint_addr_list a2 (ocontext_addr Γ2)
-                             -> Backedges d1 ((⊢app Γ1 Γ2) :: ls)
-                            -> Backedges d2 ((⊢app Γ1 Γ2) :: ls)
+                             -> Backedges d1 ( (1, ⊢app Γ1 Γ2) :: lift ls)
+                            -> Backedges d2 ( (1, ⊢app Γ1 Γ2) :: lift ls)
                              -> OValid (ORule ls Cut (⊢app Γ1 Γ2) [d1;d2])
  | V_Ex' d F G Γ1 Γ2 ls :
                             OValid d 
                             -> OClaim d (⊢ app Γ1 (G::F::Γ2)) 
-                            -> Backedges d ((⊢app Γ1 (F::G::Γ2)) :: ls)
+                            -> Backedges d ( (1, ⊢app Γ1 (F::G::Γ2)) :: lift ls)
                             -> OValid (ORule ls Ex (⊢app Γ1 (F::G::Γ2)) [d])
  | V_Mu' d F Γ ls a :
                            OValid d 
-                           -> OClaim d (⊢ { bsubst 0 ($ F) F, i::a }::Γ)
-                           -> Backedges d ((⊢ { ($ F), a }::Γ) :: ls)
-                           -> OValid (ORule ls Mu (⊢ { ($ F), a }::Γ) [d])
+                           -> OClaim d (⊢ { F[[ %0 := µ F ]], i::a }::Γ)
+                           -> Backedges d ( (1, ⊢ { (µ F), a }::Γ) :: lift ls)
+                           -> OValid (ORule ls Mu (⊢ { (µ F), a }::Γ) [d])
  | V_Nu' d F Γ ls a :
                            OValid d 
-                           -> OClaim d (⊢ { bsubst 0 (€ F) F, i::a }::Γ)
-                           -> Backedges d ((⊢ { (€ F), a }::Γ) :: ls)
-                           -> OValid (ORule ls Mu (⊢ { (€ F), a }::Γ) [d])
+                           -> OClaim d (⊢ { F[[ %0 := ν F ]], i::a }::Γ)
+                           -> Backedges d ( (1, ⊢ { (ν F), a }::Γ) :: lift ls)
+                           -> OValid (ORule ls Mu (⊢ { (ν F), a }::Γ) [d])
  
  (** FINALLY, THE BACK-EDGE RULE **)
  
- | V_BackEdge ls s s': s' = UpTRSeq s ls -> s' <> (⊢ [])
-                                  -> OValid (ORule ls (BackEdge (s')) s [])
+ | V_BackEdge ls s n: oseq_equiv s (get n ls)
+                                                         -> OValid (ORule ls (BackEdge n) s [])
  .
 
 Hint Constructors OValid.
 
 Definition oderiv_example' :=
-ORule [] Nu (⊢ [{ (€ (%0)⊕(%0)), [] }]) 
+ORule [] Nu (⊢ [{ (ν (%0)⊕(%0)), [] }]) 
           [
           (
-          ORule [(⊢ [{ (€ (%0)⊕(%0)), [] }])] Or_add_l (⊢ [ { ((€ (%0)⊕(%0)) ⊕ (€ (%0)⊕(%0))), [i] } ] )
+          ORule [(1, ⊢ [{ (ν (%0)⊕(%0)), [] }])] Or_add_l (⊢ [ { ((ν (%0)⊕(%0)) ⊕ (ν (%0)⊕(%0))), [i] } ] )
             [
             (
-            ORule [(⊢ [{ (€ (%0)⊕(%0)), [] }])] (BackEdge (⊢ [{ (€ (%0)⊕(%0)), [] }])) (⊢ [ { € (%0)⊕(%0), [l;i] } ] ) []
+            ORule [(2, ⊢ [{ (ν (%0)⊕(%0)), [] }])] (BackEdge 2) (⊢ [ { ν (%0)⊕(%0), [l;i] } ] ) []
             )
             ] 
           ) 
@@ -292,19 +364,21 @@ Compute level oderiv_example'.
 Theorem thm_oexample: 
   OValid (oderiv_example').
 Proof.
-  repeat constructor; unfold not; intros; discriminate H.
+  repeat constructor.
 Qed.
 
-Definition context_example := [(€ (%0)⊕(%0))%form; ($ (%1)#(%0))%form].
+(* A few printing functions *)
+
+Definition context_example : context := [(ν (%0)⊕(%0))%form; (µ (%1)#(%0))%form].
 Compute (print_ctx context_example).
 
 Definition sequent_example := Seq context_example.
 Compute (print_seq sequent_example).
 
-Fixpoint print_list_oseq (ls:list osequent) :=
+Fixpoint print_list_oseq (ls:list (nat*osequent)) :=
   match ls with
   | [] => ""
-  | s::ls => (print_oseq s)
+  | (n, s)::ls => (print_oseq s)
   end.
 
 Fixpoint print_oderiv_list (d:oderivation): list string :=
@@ -322,8 +396,11 @@ Fixpoint print_list_string (l:list string): string :=
   
 Definition print_oderiv (d:oderivation) : string := print_list_string (print_oderiv_list d).
 
-Compute print_deriv_list deriv_example'.
-Hint Constructors Valid.
+Compute print_oderiv_list oderiv_example'.
+
+
+
+
 
 (* Sequent provable if it is the conclusion of an existing Valid derivation *)
 
@@ -349,9 +426,9 @@ Inductive OPr : osequent -> Prop :=
                                         -> OPr (⊢ app Γ1 Γ2)
  | R_Ex F G Γ1 Γ2 : OPr (⊢ app Γ1 (F::G::Γ2)) -> OPr (⊢ app Γ1 (G::F::Γ2))
  | R_Mu F Γ a :
-      OPr (⊢ { bsubst 0 ($ F) F, i::a } :: Γ) -> OPr ((⊢ { ($ F), a }::Γ))
+      OPr (⊢ { F[[ %0 := µ F ]], i::a } :: Γ) -> OPr ((⊢ { (µ F), a }::Γ))
  | R_Nu F Γ a :
-      OPr (⊢ { bsubst 0 (€ F) F, i::a } :: Γ) -> OPr ((⊢ { (€ F), a }::Γ))
+      OPr (⊢ { F[[ %0 := ν F ]], i::a } :: Γ) -> OPr ((⊢ { (ν F), a }::Γ))
   .
 Hint Constructors OPr.
 
@@ -361,47 +438,9 @@ Proof.
   repeat constructor. apply (R_Ax _ (// "A") [l] [r]); intuition.
 Qed.
 
-(* We just built the Trees for pre-circular derivations, and their pre-validity with the property
-    OValid. We would like now to prove their validity, but we would first have to introduce paths and
-    traces, thus we have to define infinite structure.
-    - build infinite derivations with circular ones defining unfolding 
-    - define a trace on a circular proof as a thread on its unfolding
-    - define Inf(t) for t a thread or a trace
-    - characterize the min of Inf(t)
-    - give the validity criteria
-    *)
-
-
 Theorem ovalid_deriv_is_OValid: forall (d:oderivation), 
   OValid d <-> (ovalid_deriv d = true).
 Proof.
 Admitted.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     

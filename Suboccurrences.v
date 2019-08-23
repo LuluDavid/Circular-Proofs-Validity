@@ -51,7 +51,7 @@ Lemma suboccurrence_b_trans : forall (F G H: Occurrence),
   suboccurrence_b F G = true -> suboccurrence_b G H = true -> suboccurrence_b F H = true.
 Proof.
   intro; destruct F; destruct G; generalize dependent a; generalize dependent a0.
-  induction F; intro; induction G; intro; induction H; intros;
+  induction F; intro; induction H; intros;
   simpl; simpl in H; simpl in H0;
   try(apply orb_true_iff in H; destruct H; try discriminate H;
     apply eqb_eq in H; injection H as H1; subst; simpl in H0; assumption);
@@ -98,203 +98,18 @@ Local Open Scope string_scope.
 Notation "F ≪ G" := (Suboccurrence G F) (at level 100).
 
 Definition f1 : Occurrence := { // "X", [r;i;i] }.
-Definition f2 : Occurrence := { $ (%1 & (// "X")), [i] }.
+Definition f2 : Occurrence := { µ (%0 & (// "X")), [i] }.
 
 Lemma example_suboccurrence: Suboccurrence f2 f1.
 Proof.
   unfold f1; unfold f2. repeat econstructor. 
 Qed.
 
-(** TREE OF A FORMULA *)
-
-Local Open Scope eqb_scope.
-
-Inductive Tree: Type :=
-  | leaf: Occurrence -> Tree
-  | unary: Tree -> Occurrence -> Tree
-  | binary: Tree -> Tree -> Occurrence -> Tree.
-
-Instance tree_eqb: Eqb Tree :=
-  fix tree_eqb T1 T2 :=
-  match T1, T2 with
-  | leaf o1, leaf o2 => (o1 =? o2)
-  | unary T1 o1, unary T2 o2 => (o1 =? o2) &&& (tree_eqb T1 T2)
-  | binary T1 T1' o1, binary T2 T2' o2 => (o1 =? o2) &&& (tree_eqb T1 T2) &&& (tree_eqb T1' T2')
-  | _, _ => false
-  end.
-
-Definition getOccurrence (T:Tree): Occurrence :=
-  match T with
-  | leaf o => o
-  | unary _ o => o
-  | binary _ _ o => o
-  end.
-
-(* This property juste traduces the fact that: 
-      -> Addresses are well connected between nodes.
-      -> Binary nodes are only bound to Op formulas
-      -> Unary nodes are only bound to Quant formulas
-      -> Leaf nodes are only bound to Nullary formulas
- *)
- 
-Inductive ValidTree:Tree -> Prop :=
-  | VLeaf (F:formula)(A:address): In F [⊤;⊥;°; !] \/ (exists v, F = Var v) -> ValidTree (leaf { F, A })
-  | VUnary (o:Occurrence)(T:Tree): ValidTree T
-                                                                    -> (o ⇀ (getOccurrence T)) 
-                                                                    -> ValidTree (unary T o)
-  | VBinary (o:Occurrence)(T1 T2: Tree): ValidTree T1 -> ValidTree T2 
-                                                                                 -> (o ⇀ (getOccurrence T1)) 
-                                                                                 -> (o ⇀ (getOccurrence T2))
-                                                                                 -> ValidTree (binary T1 T2 o)
-  .
-
-Definition Psi: formula := €($((%0 # %1) & ° ))
-.
-
-Definition TreeExample: Tree :=
-  unary (
-                unary ( 
-                               binary (
-                                              binary ( 
-                                                              leaf { (%0), [l;l;i;i] } ) 
-                                                          ( 
-                                                              leaf { (%1), [r;l;i;i] } )
-                                               { (%0 # %1)%form, [l;i;i] }
-                                               ) 
-                                              (
-                                              leaf { °, [r;i;i] }
-                                              ) 
-                               { ((%0 # %1) & ° )%form, [i;i] }
-                               ) 
-                { ($((%0 # %1) & ° ))%form, [i] }
-                )
-  { Psi,[] }.
-
-(*                                       -> Y
-                                -> # 
-                                          -> X
-nu X -> mu Y -> &
-                                -> °
-                    
-*)
-
-Theorem ValidExample: ValidTree TreeExample.
-Proof.
-  constructor; constructor; constructor; constructor; constructor; intuition.
-  - right; exists (BVar 0); reflexivity.
-  - right; exists (BVar 1); reflexivity.
-Qed.
-
-Fixpoint TSize(T:Tree): nat :=
-  match T with
-  | leaf _ => 0
-  | unary T' _ => 1 + (TSize T')
-  | binary T1 T2 _ => 1 + Nat.max (TSize T1)(TSize T2)
-  end.
-
-Fixpoint formulaTreeRec (F:formula)(A:address): Tree:=
-  match F with
-  | ⊤ | ⊥ | ° | ! | Var _ => leaf { F, A }
-  | Quant q F' => unary (formulaTreeRec F' (i::A)) { F, A }
-  | Op o F1 F2 => binary (formulaTreeRec F1 (l::A)) (formulaTreeRec F2 (r::A)) { F, A }
-  end.
-
-Definition formulaTree (F:formula) := formulaTreeRec F [].
-
-Definition TreeExampleBis := formulaTree Psi.
-
-Compute TreeExampleBis =? TreeExample.
-
-Fixpoint getAddresses (f:formula)(T:Tree): list address :=
-  match T with
-  | leaf { F, a } => if f =? F then [a] else []
-  | unary T' { F, a } => if f =? F then a::(getAddresses f T') else getAddresses f T'
-  | binary T1 T2 { F, a } => if f =? F then a::app (getAddresses f T1)(getAddresses f T2) 
-                                                          else app (getAddresses f T1)(getAddresses f T2) 
-  end.
 
 
 
 
 
-
-(** COMPUTING THE ACCESS TO BOUND VARIABLES DEFINITIONS **)
-
-Fixpoint FirstAttempt (T:Tree) : list Occurrence :=
-  match T with
-  | leaf _ => []
-  | unary T' o => FirstAttempt T'++[o]
-  | binary T1 T2 _ => FirstAttempt T1 ++ FirstAttempt T2 (* There might be a problem here *)
-  end.
-
-Definition pbForm : formula := (€ %1) # ($ %1).
-Definition pbTree := formulaTree pbForm.
-
-Compute FirstAttempt (pbTree).
-
-(* In the case of a binary Op, if we just append the variables, we might not find 
-back the good definition for a bound variable on one side. 
-Except if we look in the addresses to find the good one ? 
-
-The idea at first was to get the first back element of the list to get (%1)'s definition, etc.
-But appending prevents from doing that. What we could imagine is to get the closest
-sub-address for (%1), the 2nd closest for (%2), etc...
-It forces us to define a sort, or some kind of dictionary/hashmap structure. *)
-
-(* RETURNS THE LIST(ADDRESS*FORMULA) OF ALL BINDING OCCURRENCES IN [T] *)
-Fixpoint BindingOccurrences (T:Tree) : list (address*formula) :=
-  match T with
-  | leaf _ => []
-  | unary T' o => let '{ F, A }:=o in ( BindingOccurrences T' ++ [(A,F)] )
-  | binary T1 T2 _ => BindingOccurrences T1 ++ BindingOccurrences T2
-  end.
-
-Compute BindingOccurrences (pbTree).
-
-(* We would now like to use these utilities to get for a given n the n-th closest binder of an address a0. 
-    The easiest idea seems to first filtrate all a0 subaddresses (and then take the n-th one ?)*)
-
-(* GET ALL SUB-ADDRESSES OF [a0] IN [D] *)
-Fixpoint filter_sub_addresses (a0:address)(D:list(address*formula)) : list(address*formula) :=
-  match D with
-    | (a,F)::D' => if (sub_addressb a a0) then (a,F)::(filter_sub_addresses a0 D') 
-                                                              else filter_sub_addresses a0 D'
-    | nil        => []
-    end.
-
-(* GET ALL SUB-ADDRESSES OF [a0] IN T's OCCURRENCE ADDRESSES *)
-Definition tree_filter (a0:address)(T:Tree) : list(address*formula) := filter_sub_addresses a0 (BindingOccurrences T).
-
-Definition Example_sub_filtering : formula := $ (//"X" # €(%1 & (%2 & !))).
-
-Definition Tree_Prev := formulaTree Example_sub_filtering.
-
-Compute Tree_Prev.
-
-Compute tree_filter [l; r; i; r; i] Tree_Prev.
-
-(* GET THE DEFINITION OF [%n] KNOWING ITS ADDRESS [a] *)
-Definition getDef (a:address)(n:nat)(T:Tree) := nth_error (tree_filter a T) (pred n).
-
-Compute getDef [l; i; r; i] 1 Tree_Prev.
-Compute getDef [l; r; i; r; i] 2 Tree_Prev.
-
-(* If, at one point, the bound variable decides either it goes left or right, then the above sorting 
-    function will remove all the other part of the happen, so the order of closest to furthest binder should 
-    be conserved by this sort. Thus, we just have to take the first element for %1, the second for %2, etc..
-    We can conclude that for a given bound variable %n at a given address a, we can get back its 
-    definition in the tree *)
-
-Definition freeVar (a:address)(n:nat)(T:Tree): Prop := (getDef a n T) = None.
-
-
-
-
-
-
-
-
-(** RECURSIVE SUBSTITUTION **)
 
 
 

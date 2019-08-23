@@ -70,11 +70,19 @@ Hint Constructors sub_address.
 
 Notation "a ⊑ b" := (sub_address a b) (at level 100). 
 
+Lemma sub_address_nil: forall a, (a ⊑ []) -> a = [].
+Proof.
+Admitted.
+
 Lemma sub_address_refl: Reflexive sub_address.
 Proof.
   red; intros; induction x; try constructor.
   apply (SCons [a] [a] x); apply (SCons [] [] [a]); constructor.
 Qed.
+
+Lemma sub_address_trans: Transitive sub_address.
+Proof.
+Admitted.
 
 Fixpoint sub_addressb (a a': address): bool :=
   match a, a' with
@@ -112,12 +120,15 @@ Proof.
           apply (IHa'' (a' ++ [a]) (a0 ++ [a])).
           + constructor; assumption.
           + apply sub_address_app_char; assumption.
-  - intros. generalize dependent a; induction a'; induction a; intros; try (constructor; reflexivity).
-    -- inversion H.
-    -- destruct a; simpl in H.
-      --- constructor.
-      --- admit.
-Admitted.
+  - intros. generalize dependent a; induction a'; induction a; intros; 
+    try (constructor; reflexivity); try (inversion H);
+    try(destruct a; simpl in H; try constructor; apply orb_true_iff in H; destruct H; 
+          try(apply Utils.eqb_eq in H; rewrite H; apply sub_address_refl);
+          apply IHa' in H; eapply sub_address_trans; try eassumption;
+            rewrite <- (app_nil_l a'); try (apply (SCons _ [l] a'); constructor);
+                                                     try (apply (SCons _ [r] a'); constructor);
+                                                     try (apply (SCons _ [i] a'); constructor)).
+Qed.
 
 Definition disjoint (a a': address): Prop := ~(sub_address a a') /\ ~(sub_address a' a).
 
@@ -234,8 +245,12 @@ Fixpoint fresh_address (la: list address) : address :=
 
 Compute fresh_address [[i];[r;i];[l;i];[l;r;i]].
 
-
-
+Fixpoint npop (n:nat)(a:address): option address :=
+  match n, a with
+  | 0, a' => Some a'
+  | S n, c::a' => npop n a'
+  | S n, [] => None
+  end.
 
 
 

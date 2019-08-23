@@ -24,17 +24,11 @@ Notation "F ⧼ G" := (Subform G F) (at level 100).
 
 Fixpoint subform_b (F G : formula) := 
 (F =? G) ||
-match F,G with
-|(Op o F1 F2), G => (subform_b F1 G) || (subform_b F2 G)
-|(Quant q F), G => (subform_b F G)
-| _, _ => false
-end.
-
-Theorem V_eqb_refl : forall (v:V), V_eqb v v = true.
-Proof.
-  intros. apply Utils.eqb_refl.
-Qed.
-
+    match F,G with
+    |(Op o F1 F2), G => (subform_b F1 G) || (subform_b F2 G)
+    |(Quant q F), G => (subform_b F G)
+    | _, _ => false
+    end.
 
 Theorem subform_b_refl : forall F,
   subform_b F F = true.
@@ -191,10 +185,10 @@ Qed.
   
 Theorem subform_dec : forall F G, {Subform F G} + {~ (Subform F G)}.
 Proof.
-intros.
-case_eq (subform_b F G) ; intros.
-apply subform_b_is_subform in H ; left ; assumption.
-right ; intro ; apply subform_b_is_subform in H0 ; rewrite H in H0 ; apply diff_false_true in H0 ; contradiction.
+  intros.
+  case_eq (subform_b F G) ; intros.
+  apply subform_b_is_subform in H ; left ; assumption.
+  right ; intro ; apply subform_b_is_subform in H0 ; rewrite H in H0 ; apply diff_false_true in H0 ; contradiction.
 Qed.
 
 

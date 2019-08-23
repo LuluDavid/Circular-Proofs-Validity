@@ -323,10 +323,29 @@ Qed.
 
 (** Max and lists *)
 
+Lemma max_S : forall n m, (S(Nat.max n m) = Nat.max (S n) (S m)).
+Proof.
+  induction n; induction m; simpl; trivial.
+Qed.
+
+Lemma le_max: forall n m, n <= Nat.max n m /\ m <= Nat.max n m.
+Proof.
+   intros; omega with *.
+Qed.
+
+Lemma le_max_bis: forall n m, Nat.max n m <= n \/ Nat.max n m <= m.
+Proof.
+  intros; omega with *.
+Qed.
+  
 Lemma max_le n m p : Nat.max n m <= p <-> n <= p /\ m <= p.
 Proof.
  omega with *.
 Qed.
+
+Lemma max_eq n m p : Nat.max n m = p <-> n = p \/ m = p.
+Proof.
+Admitted.
 
 Lemma max_lt n m p : Nat.max n m < p <-> n < p /\ m < p.
 Proof.
@@ -336,6 +355,20 @@ Qed.
 Lemma max_0 n m : Nat.max n m = 0 <-> n=0 /\ m=0.
 Proof.
  omega with *.
+Qed.
+
+Lemma le_pred_S : forall n m, Nat.pred n <= m <-> n <= S m.
+Proof.
+  intros; omega with *.
+Qed.
+
+Lemma eq_pred_S : forall n m, 1 <= n -> (Nat.pred n = m <-> n = S m).
+Proof.
+  split; induction n; intros.
+  - inversion H.
+  - simpl in H0; subst; trivial.
+  - discriminate H0.
+  - simpl; injection H0 as H0; assumption.
 Qed.
 
 Lemma max_mono a a' b b' :
@@ -418,4 +451,10 @@ Theorem contrapositive : forall (P Q : Prop),
 Proof.
   intros P Q. intros Hi. intros Hf. unfold not. unfold not in Hf. intros Hg.
   apply Hf.  apply Hi. apply Hg.
+Qed.
+
+Lemma not_inv:
+  forall (P:Prop), P-> ~~P.
+Proof.
+  intros; unfold not; intros; destruct H0; assumption.
 Qed.

@@ -1,14 +1,11 @@
-Require Import Defs.
-Require Import StringUtils.
-Require DecimalString.
-Import ListNotations.
-Import Logic.
+Require Export StringUtils Defs.
+Import ListNotations Ascii.
 Local Open Scope bool_scope.
 Local Open Scope lazy_bool_scope.
 Local Open Scope string_scope.
 Local Open Scope eqb_scope.
 
-(** A 2nd order variable is defined as bound or free from the beginning *)
+(** VARIABLES *)
 
 Inductive V :=
   | FVar : variable -> V (** Free 2nd Order Variable (global name) *)
@@ -23,11 +20,14 @@ Instance V_eqb : Eqb V :=
   | _, _ => false
   end.
 
-
 Delimit Scope V_scope with V.
 Bind Scope V_scope with V.
 
-(* Formulas *)
+
+
+
+
+(** FORMULAS *)
 
 Inductive formula :=
   | Top
@@ -52,13 +52,15 @@ Proof.
 induction F ; simpl; intuition.
 Qed.
 
+(* Notations *)
+
 Delimit Scope formula_scope with form.
 Bind Scope formula_scope with formula.
 
 Notation "⊥" := Bot.
 Notation "⊤" := Top.
 Notation "!" := One.
-Notation "°" := Zero.
+Notation "'ø'" := Zero.
 Infix "⊕" := (Op Or_add) (at level 85, right associativity) : formula_scope.
 Infix "#" := (Op Or_mult) (at level 85, right associativity) : formula_scope.
 Infix "&" := (Op And_add) (at level 85, right associativity) : formula_scope.
@@ -67,12 +69,18 @@ Infix "⊗" := (Op And_mult) (at level 85, right associativity) : formula_scope.
 Notation "// V" := (Var (FVar V)) (at level 20) : formula_scope.
 Notation "% n" := (Var (BVar n)) (at level 20) : formula_scope.
 
-Notation "$ A" := (Quant µ A)
+Notation "'µ' A " := (Quant mu A)
  (at level 200, right associativity) : formula_scope.
-Notation "€ A" := (Quant ν A)
+Notation "'ν' A" := (Quant nu A)
  (at level 200, right associativity) : formula_scope.
 
-Definition Naturals:formula := ($ (!⊕(%0))).
+Local Open Scope form.
+
+
+Definition Naturals:formula := (µ (!⊕(%0))).
+
+
+(* Dual *)
 
 Fixpoint dual (F : formula) : formula := match F with
 | Var X => Var X
@@ -84,8 +92,8 @@ Fixpoint dual (F : formula) : formula := match F with
 | Op Or_mult G H => Op Or_mult (dual G) (dual H)
 | Op And_add G H => Op Or_add (dual G) (dual H)
 | Op And_mult G H => Op And_mult (dual G) (dual H)
-| Quant µ G => Quant ν (dual G)
-| Quant ν G => Quant µ (dual G)
+| Quant mu G => Quant nu (dual G)
+| Quant nu G => Quant mu (dual G)
 end.
 
 Notation "~ F" := (dual F) (at level 75, right associativity).
@@ -129,11 +137,14 @@ Qed.
 
 Definition NaturalsDual := dual Naturals.
 
+
+
+
+
+
+
 (** Some generic functions, meant to be overloaded
-    with instances for terms, formulas, context, sequent, ... 
-    VMap and Check not necessary anymore because we 
-    work here with 2nd order variables.
- **)
+    with instances for variables, formulas, context, sequent, ... **)
 
 (** Replace a bound variable with a formula, useful for unfolding **)
 Class BSubst (A : Type) := bsubst : nat -> formula -> A -> A.
@@ -143,24 +154,23 @@ Arguments bsubst {_} {_} _ _ !_.
 Class Level (A : Type) := level : A -> nat.
 Arguments level {_} {_} !_.
 
-(** Compute the set of free variables *)
-Class FVars (A : Type) := fvars : A -> Names.t.
-Arguments fvars {_} {_} !_.
+Hint Unfold BSubst Level.
 
 (** Some generic definitions based on the previous ones *)
 
 Definition BClosed {A}`{Level A} (a:A) := level a = 0.
 
-Definition FClosed {A}`{FVars A} (a:A) := Names.Empty (fvars a).
+Hint Unfold BClosed.
 
-Hint Unfold BClosed FClosed.
+Notation "f [[ % n := F ]]" := (bsubst n F f) (at level 150, right associativity).
+
+
+
+
+
+
 
 Local Open Scope eqb_scope.
-(** Substitution of a free variable in a variable :
-    in [V], free var [X] is replaced by [U]. *)
-
-Definition varsubst (V U X:V) := if (V =? X)%V then U else X.
-
  
 (** Some structural extensions of these generic functions *)
 
@@ -169,9 +179,6 @@ Instance bsubst_list {A}`{BSubst A} : BSubst (list A) :=
 
 Instance level_list {A}`{Level A} : Level (list A) :=
  fun l => list_max (List.map level l).
-
-Instance fvars_list {A}`{FVars A} : FVars (list A) :=
- Names.unionmap fvars.
  
 Instance bsubst_pair {A B}`{BSubst A}`{BSubst B} : BSubst (A*B) :=
  fun n t '(a,b) => (bsubst n t a, bsubst n t b).
@@ -179,24 +186,25 @@ Instance bsubst_pair {A B}`{BSubst A}`{BSubst B} : BSubst (A*B) :=
 Instance level_pair {A B}`{Level A}`{Level B} : Level (A*B) :=
  fun '(a,b) => Nat.max (level a) (level b).
 
-Instance fvars_pair {A B}`{FVars A}`{FVars B} : FVars (A*B) :=
- fun '(a,b) => Names.union (fvars a) (fvars b).
 
- 
-(** With respect to a particular signature, a term is valid
-    iff it only refer to known function symbols and use them
-    with the correct arity. *)
+
+
+
+(** Neutral [formula] *)
+
+Definition neutral (f:formula) : Prop := In f [ ⊥ ; ⊤ ; ! ; ø ].
 
 (** Atomic [formula] *)
 Inductive atomic : formula -> Prop :=
 | atomic_var : forall x, atomic (Var x).
 
-Instance V_fvars : FVars V :=
- fix term_fvars v :=
- match v with
- | BVar _ => Names.empty
- | FVar v' => Names.singleton v'
- end.
+
+
+
+
+
+
+(** VARIABLES *)
 
 Instance V_level : Level V :=
  fix V_level v :=
@@ -218,11 +226,11 @@ Fixpoint print_formula (f:formula) :=
   | Top => "⊤"
   | One => "1"
   | Zero => "0"
-  | (% n)%form => "%" (* Eventuellement paramétrer avec n si possible *)
+  | (% n)%form => "%" ++ (String (ascii_of_nat (48 + n)) "")
   | (// V)%form => V
   | Op o f f' =>
-    "{" ++ print_formula f ++ "}" ++ pr_op o ++ "{" ++ print_formula f' ++ "}"
-  | Quant q f => pr_quant q ++ "{" ++ print_formula f ++ "}"
+    "{ " ++ print_formula f ++ " }" ++ pr_op o ++ "{ " ++ print_formula f' ++ " }"
+  | Quant q f => pr_quant q ++ "{ " ++ print_formula f ++ " }"
   end.
 
 Compute print_formula (Naturals).
@@ -243,16 +251,39 @@ Instance form_level : Level formula :=
   | Quant _ f' => Nat.pred (form_level f')
   end.
 
-Compute form_level ($((% 1)&(!#(% 1))))%form.
+Compute form_level (µ((% 0)&(!#(% 0))))%form.
 
-Lemma BClosed_op: forall (F1 F2: formula) (o:op), BClosed (Op o F1 F2) -> (BClosed F1) /\ (BClosed F2).
+Lemma BClosed_quant: forall F q, BClosed (Quant q F) -> form_level F <= 1.
 Proof.
-  intros. unfold BClosed in H; unfold level in H; simpl in H.
+  intros. unfold BClosed, level in H; simpl; simpl in H.
+  assert (forall n, Nat.pred n = 0 <-> n <= 1). 
+  { split; induction n; intro; trivial.
+    - constructor; trivial.
+    - simpl in H0; subst; trivial.
+    - inversion H0; subst; trivial; inversion H2; subst.
+  }
+  apply H0; assumption.
+Qed. 
+
+Lemma BClosed_op: forall (F1 F2: formula) (o:op), BClosed (Op o F1 F2) <-> (BClosed F1) /\ (BClosed F2).
+Proof.
+  intros. split; intro. unfold BClosed in H; unfold level in H; simpl in H.
   assert (Hloc: forall n m, Nat.max n m = 0 -> n = 0 /\ m = 0).
   { intros; generalize dependent m; induction n; induction m; intros; split; trivial;
     try (discriminate H0).
    }
    apply Hloc in H; destruct H; split; assumption.
+   destruct H. unfold BClosed, level; simpl. rewrite H, H0; trivial.
+Qed.
+
+Lemma level_quant: forall F q n, form_level (Quant q F) <= n -> form_level F <= S n.
+Proof.
+  intros; simpl in H; apply le_pred_S in H; assumption.
+Qed.
+
+Lemma level_quant_eq: forall F q n, form_level (Quant q F) = n -> form_level F <= S n.
+Proof.
+  intros. eapply level_quant. erewrite H. trivial.
 Qed.
 
 (** Important note : [bsubst] below is only intended to be
@@ -267,31 +298,13 @@ Instance form_bsubst : BSubst formula :=
   | Op o f1 f2 => Op o (form_bsubst n F f1) (form_bsubst n F f2)
   | Quant q f' => Quant q (form_bsubst (S n) F f')
  end.
+ 
+Definition example1: formula := µ (%1 # (ν %1 & %0)).
+Definition example2:formula := example1[[ %0 := //"A" ]].
+Compute example1.
+Compute example2.
 
-Compute form_bsubst 0 (// "A")%form ($((% 1)&(!#(% 1))))%form.
 
-Definition F: formula := $ (%1 # (€ %2 & %1)).
-Definition G:formula := bsubst 1 (// "A")%form F.
-Compute F.
-Compute G.
-
-(*
-   F[X/µX.F] avec F = 1 # X => F' = 1 + µX.(1 # X)
-*)
-
-Instance form_fvars : FVars formula :=
- fix form_fvars f :=
-  match f with
-  | Top | Bot | One | Zero => Names.empty
-  | Var V =>  match V with
-                                    | FVar X => Names.singleton X
-                                    | BVar _ => Names.empty
-                                    end
-  | Op _ f1 f2 => Names.union (form_fvars f1) (form_fvars f2)
-  | Quant _ f' => form_fvars f'
-  end.
-  
-   
 Instance form_eqb : Eqb formula :=
  fix form_eqb f1 f2 :=
   match f1, f2 with
@@ -307,17 +320,112 @@ Instance form_eqb : Eqb formula :=
   end.
   
 (* Difference between bounded and free variables *)
-Compute    ($((% 0)&(!#(% 0))))%form 
+Compute    (µ((% 0)&(!#(% 0))))%form 
                                    =?
-                   ($((// "V")&(!#(// "V"))))%form.
+                   (µ((// "V")&(!#(// "V"))))%form.
+
+Lemma le_level_BSubst_unchanged : forall G f k n, 
+  form_level G <= n -> n <= k -> G[[ %k := f ]] = G.
+Proof.
+  induction G; intros; try destruct v; try (inversion H0; reflexivity); cbn; simpl.
+ - destruct (n0 =? k) eqn:Heq; try apply eqb_eq in Heq; subst; trivial; simpl in H;
+    omega with *.
+ -  apply max_le in H; destruct H;
+    try (rewrite (IHG1 _ _ n));
+    try (rewrite (IHG2 _ _ n)); try assumption;
+    trivial.
+- simpl in H;
+  rewrite (IHG f (S k) (S n)); trivial.
+  -- apply le_pred_S in H; assumption.
+  -- apply le_n_S in H0; assumption.
+Qed.
+
+Lemma eq_level_BSubst_unchanged : forall G f k n, 
+  form_level G = n -> n <= k -> G[[ %k := f ]] = G.
+Proof.
+  intros; eapply le_level_BSubst_unchanged; try eassumption; rewrite H; trivial.
+Qed.
+
+Lemma le_level_BSubst : forall (G f:formula) k n1 n2, 
+  form_level G <= n1 -> form_level f <= n2 -> form_level (G[[ %k := f ]]) <= Nat.max n1 n2.
+Proof.
+  induction G; intros; try destruct v; simpl; try apply le_0_n.
+  - unfold bsubst; simpl. 
+    destruct (le_max n1 n2).
+    destruct (n =? k);
+    eapply le_trans; eassumption.
+  - simpl in H. apply max_le in H. destruct H. 
+    apply (IHG1 f k n1 n2) in H; try assumption.
+    apply (IHG2 f k n1 n2) in H1; try assumption.
+    destruct (le_max_bis (form_level (G1 [[ % k := f]])) (form_level (G2 [[ % k := f]]))).
+    -- apply (le_trans _ (form_level (G1 [[ % k := f]])) _); assumption.
+    -- apply (le_trans _ (form_level (G2 [[ % k := f]])) _); assumption.
+  - apply le_pred_S. rewrite (max_S n1 n2).
+    apply IHG; try assumption; apply (level_quant G q n1) in H; try assumption.
+    eapply le_trans; try eassumption; apply le_S; trivial.
+Qed.
+
+Lemma eq_level_BSubst : forall (G f:formula) k n1 n2, 
+  form_level G = n1 -> form_level f = n2 -> form_level (G[[ %k := f ]]) <= Nat.max n1 n2.
+Proof.
+  intros; eapply le_level_BSubst; try eassumption; try rewrite H; try rewrite H0; trivial.
+Qed.
+
+Lemma BClosed_level_bsubst: forall F G k, 
+  BClosed F -> F [[ %k := G ]] = F.
+Proof.
+  intros. apply (eq_level_BSubst_unchanged F G _ 0); try assumption; apply le_0_n.
+Qed.
+
+Lemma BClosed_quant_bsubst : forall q F,
+  BClosed (Quant q F) -> BClosed (F[[ %0 := Quant q F ]]).
+Proof.
+  assert (Hloc: forall q o F1 F2, BClosed (F1 [[ %0 := Quant q F1 ]]) -> BClosed (F2 [[ %0 := Quant q F2 ]])
+                              -> BClosed (F1 [[ %0 := Quant q (Op o F1 F2) ]]) /\  BClosed (F2 [[ %0 := Quant q (Op o F1 F2) ]])). 
+  admit.
+  intros.
+  apply BClosed_quant in H. inversion H.
+  - unfold BClosed, level. 
+    induction F; unfold bsubst; try destruct v; simpl; trivial.
+    -- simpl in H1. injection H1 as H1. subst. rewrite eqb_refl. trivial.
+    -- simpl in H. apply max_le in H. destruct H. 
+       simpl in H1. inversion H; inversion H0.
+       + apply IHF1 in H; try assumption. apply IHF2 in H0; try assumption. 
+          unfold bsubst in H; simpl in H. unfold bsubst in H0; simpl in H0.
+          pose proof eq_level_BSubst as Lemma.
+          destruct (Lemma F1 (Quant q (Op o F1 F2)) 0 1 0); try assumption.
+          ++ simpl. omega with *.
+          ++ apply (Hloc q o F1 F2) in H; try assumption. destruct H. rewrite H, H2; trivial.
+          ++ apply (Hloc q o F1 F2) in H; try assumption. destruct H. rewrite H, H2; trivial.
+       + inversion H4. rewrite H6. apply IHF1 in H3; try assumption. 
+          apply (BClosed_level_bsubst F2 (Quant q F2) 0) in H6.
+          apply (Hloc q o F1 F2) in H3.
+          ++ destruct H3. fold level; rewrite H3. rewrite H5. trivial.
+          ++ rewrite H6. inversion H4; assumption.
+       + inversion H3. rewrite H6. apply IHF2 in H0; try assumption. 
+          apply (BClosed_level_bsubst F1 (Quant q F1) 0) in H6.
+          apply (Hloc q o F1 F2) in H0.
+          ++ destruct H0. fold level; rewrite H0. rewrite H4. trivial.
+          ++ rewrite H6. inversion H3; assumption.
+       + inversion H3; inversion H5. rewrite H7. destruct (Hloc q o F1 F2).
+          ++ apply (BClosed_level_bsubst F1 (Quant q F1) 0) in H7.
+                rewrite H7. inversion H3; assumption.
+          ++ apply (BClosed_level_bsubst F2 (Quant q F2) 0) in H8.
+                rewrite H8. inversion H5; assumption.
+          ++ rewrite H6, H9; trivial.
+    -- admit.
+  - rewrite BClosed_level_bsubst; inversion H1; assumption. 
+Admitted.
+
 (** Contexts *)
 
+
 Definition context := list formula.
-  
+
 Definition print_ctx Γ :=
   String.concat ", " (List.map print_formula Γ).
 
-(** check, bsubst, level, fvars, eqb : given by instances
+(** bsubst, level, eqb : given by instances
     on lists. *)
 
 (** Sequent *)
@@ -331,150 +439,17 @@ Definition print_seq '(⊦ Γ) :=
   " ⊦ " ++ print_ctx Γ.
 
 Instance bsubst_seq : BSubst sequent :=
- fun n u '(⊦ Γ ) => (⊦ (bsubst n u Γ) ).
+ fun n u '(⊦ Γ ) => (⊦ (Γ[[ %n := u ]]) ).
 
 Instance level_seq : Level sequent :=
  fun '(⊦ Γ ) => level Γ .
 
-Instance seq_fvars : FVars sequent :=
- fun '(⊦ Γ ) => fvars Γ.
-
 Instance seq_eqb : Eqb sequent :=
  fun '(⊦ Γ1) '(⊦ Γ2) => (Γ1 =? Γ2).
 
-Definition ctx_example := [($((% 0)&(!#(% 0))))%form; (€($((% 2)&(!#(% 1)))))%form].
+Definition ctx_example : context := [(µ((% 0)&(!#(% 0)))); (ν(µ((% 1)&(!#(% 0)))))].
 
 Compute level ctx_example.
-
-(** Derivation *)
-
-Inductive rule_kind :=
-  | Ax
-  | Cut
-  | Ex
-  | Or_add_l | Or_add_r
-  | Or_mult
-  | And_add
-  | And_mult
-  | TopR| BotR| OneR
-  | Mu | Nu
-  | BackEdge (S:sequent)
-  .
-
-Definition print_rule (r:rule_kind) :=
-  match r with
-  | Ax => "(Ax)"
-  | Cut => "(Cut)"
-  | Ex => "(Ex)"
-  | TopR => "(⊤)"
-  | BotR => "(⊥)"
-  | OneR => "(1)"
-  | Or_add_l => "(⊕_l)"
-  | Or_add_r => "(⊕_r)"
-  | Or_mult => "(#)"
-  | And_add => "(&)"
-  | And_mult => "(⊗)"
-  | Mu => "(µ)"
-  | Nu => "(ν)"
-  | BackEdge s => "(BackEdge"++print_seq s++")"
-  end.
-  
-Instance rule_eqb : Eqb rule_kind :=
- fix rule_eqb r1 r2 :=
-  match r1, r2 with
-  | Ax, Ax | Cut, Cut | Ex, Ex | TopR, TopR | BotR, BotR | OneR, OneR | Mu, Mu | Nu, Nu
-  | Or_add_l, Or_add_l | Or_add_r, Or_add_r | Or_mult, Or_mult | And_add, And_add | And_mult, And_mult => true
-  | BackEdge Se, BackEdge Se' => Se=?Se'
-  | _, _ => false
- end.
-  
-Inductive derivation :=
-  | Rule : list sequent -> rule_kind -> sequent -> list derivation -> derivation.
-
-(** Returns the current sequent/bottom sequent *)
-
-Definition claim '(Rule _ _ s _) := s.
-
-(** Utility functions on derivations:
-    - bounded-vars level (used by the [BClosed] predicate),
-    - check w.r.t. signature *)
-
-Instance level_derivation : Level derivation :=
- fix level_derivation d :=
-  let '(Rule ls r s ds) := d in
-  list_max (level s :: List.map level_derivation ds).
-
-Instance fvars_derivation : FVars derivation :=
- fix fvars_derivation d :=
-  let '(Rule ls r s ds) := d in
-  Names.unions [fvars s; Names.unionmap fvars_derivation ds].
-
-Instance bsubst_deriv : BSubst derivation :=
- fix bsubst_deriv n u d :=
- let '(Rule ls r s ds) := d in
- Rule ls r (bsubst n u s ) (map (bsubst_deriv n u) ds).
-
-(* A Fixpoint for validity. Complicated to describe the exchange rule because we require a boolean  
-  permutation indicator for two lists. *)
-
-Fixpoint Inb (s : sequent) (l : list sequent) : bool :=
-    match l with
-       | [] => false
-       | s' :: m => (s' =? s) || (Inb s m)
-     end.
-
-Fixpoint Inb' (s : formula) (l : context) : bool :=
-    match l with
-       | [] => false
-       | s' :: m => (s' =? s) || (Inb' s m)
-     end.
-
-Notation "[ x ; y ; .. ; z ]" := (cons x (cons y .. (cons z nil) ..)) : list_scope.
-
-Inductive CPermutation {A} : list A -> list A -> Prop :=
-| cperm : forall l1 l2, CPermutation (l1 ++ l2) (l2 ++ l1).
-
-Definition valid_deriv_step '(Rule ls r s ld) :=
-  match ls, r, s, List.map claim ld with
-  | _, Ax,    (⊦ [A;A']), _ => (A' =? (dual A))
-  | _, TopR,  (⊦ ⊤::Γ ), _ => true 
-  | _, OneR,  (⊦ [!]), _ => true
-  | _, BotR,  (⊦ ⊥::Γ), [s] => s =? (⊦ Γ)
-  | _, Or_add_l, (⊦ (F⊕G)%form::Γ), [s] => s =? (⊦ F::Γ)
-  |  _, Or_add_r, (⊦ (F⊕G)%form::Γ), [s] => s =? (⊦ G::Γ)
-  | _, Or_mult,  (⊦ (F#G)%form::Γ), [s] => s =? (⊦F::G::Γ)
-  | _, And_add,  (⊦ (F&G)%form::Γ), [(⊦ F'::Γ1);(⊦ G'::Γ2)] => (F =? F') &&& (G =? G') &&& (Γ1 =? Γ) &&& (Γ2 =? Γ)
-  | _, And_mult,  (⊦ (F⊗G)%form::Γ), [(⊦ F'::Γ1);(⊦ G'::Γ2)] => (F =? F') &&& (G =? G') &&& ((app Γ1 Γ2) =? Γ)
-  | _, Cut,   (⊦ [A1;A2]), [(⊦ [B1;C1]);(⊦ [B2;C2])] => (A1 =? C1) &&& (A2 =? C2) &&& (B1 =? (dual B2))
-  | _, Ex,  (⊦ Γ), [(⊦F::Γ')] => (Inb' F Γ) (* &&& list_equivb Γ (F::Γ') *)
-  (* To be precised: exists i such as insert F at ith position in Γ' = Γ *)
-  | _, Mu, (⊦ ($ F)%form::Γ), [(⊦G::Γ')] => (G =? bsubst 0 ($ F) F) &&& (Γ =? Γ')
-  | _, Nu, (⊦ (€ F)%form::Γ), [(⊦G::Γ')] => (G =? bsubst 0 (€ F) F) &&& (Γ =? Γ')
-  | ls, (BackEdge s'), s, _ => (Inb s' ls) &&& (s' =? s)
-  | _,_,_,_ => false
-  end.
-
-Fixpoint valid_deriv d :=
-  valid_deriv_step d &&&
-   (let '(Rule _ _ _ ld) := d in
-    List.forallb (valid_deriv) ld).
-
-Definition deriv_example :=
-  Rule [] Or_mult (⊦[((// "A")#(dual (// "A")))%form]) [Rule [] Ax (⊦[(// "A")%form;dual (// "A")%form]) []].
- Print deriv_example.
-Compute 
-  bsubst_deriv 0 (// "B")%form deriv_example.
-  
-  
- (*
-  ----------------------------------------------------- (Ax)
-                      [] ⊦//A,¬//A 
-  ----------------------------------------------------- (#)
-                      [] ⊦//A#¬//A
-  *)
-  
-Compute valid_deriv deriv_example.
-(** Some examples of derivations *)
 
 Instance : EqbSpec V.
 Proof.
@@ -502,192 +477,3 @@ Instance : EqbSpec sequent.
 Proof.
  intros [] []. cbn. repeat (case eqbspec; try cons).
 Qed.
-
-(** Induction principle on derivations with correct
-    handling of sub-derivation lists. *)
-
-Lemma derivation_ind' (P: derivation -> Prop) :
-  (forall ls r s ds, Forall P ds -> P (Rule ls r s ds)) ->
-  forall d, P d.
-Proof.
- intros Step.
- fix IH 1. destruct d as (ls,r,s,ds).
- apply Step.
- revert ds.
- fix IH' 1. destruct ds; simpl; constructor.
- apply IH.
- apply IH'.
-Qed.
-
-(** 
-Claim d s => d's conclusion sequent is s. It means:
-
-                                                                                                 .
-                                                                                                 .
-                                                                                                 .
-                                                                                                d
-                                                                                          -------------
-                                                                                                s
- *)
-
-Definition Claim d s := claim d = s.
-Arguments Claim _ _ /.
-Hint Extern 1 (Claim _ _) => cbn.
-
-(* Adds the sequent s in the list of back-edgeable sequents of derivation d *)
-Definition app_deriv (s:sequent) (d:derivation) := 
-  let '(Rule ls r s ds) := d in (Rule (s::ls) r s ds).
-
-(** An inductive Prop Valid, easier to describe all expected patterns *)
-
-Inductive Valid : derivation -> Prop :=
- | V_Ax Γ A ls : In A Γ -> In (dual A) Γ -> Valid (Rule ls Ax (⊦ Γ) [])
- | V_Tr Γ ls: In ⊤ Γ -> Valid (Rule ls TopR (⊦ Γ) [])
- | V_One ls: Valid (Rule ls OneR (⊦ [!%form]) [])
- | V_Bot d Γ ls: Valid d -> Claim d (⊦Γ) -> Valid (Rule ls BotR (⊦⊥::Γ) [d])
- | V_Or_add_l d F G Γ ls: 
-   Valid d -> Claim d (⊦F::Γ) -> Valid (Rule ls Or_add_l (⊦(F⊕G)%form::Γ) [d])
- | V_Or_add_r d F G Γ ls  : 
-   Valid d -> Claim d (⊦G::Γ) -> Valid (Rule ls Or_add_r (⊦(F⊕G)%form::Γ) [d])
- | V_Or_mult d F G Γ ls :
-     Valid d -> Claim d (⊦F::G::Γ) -> Valid (Rule ls Or_mult (⊦ (F#G)%form::Γ) [d])
- | V_And_add d1 d2 F G Γ ls :
-     Valid d1 -> Valid d2 -> Claim d1 (⊦ F::Γ) -> Claim d2 (⊦ G::Γ) ->
-     Valid (Rule ls And_add (⊦ (F&G)%form::Γ) [d1;d2])
- | V_And_mult d1 d2 F G Γ1 Γ2 ls :
-     Valid d1 -> Valid d2 -> Claim d1 (⊦ F::Γ1) -> Claim d2 (⊦ G::Γ2) ->
-     Valid (Rule ls And_mult (⊦ (F⊗G)%form::(app Γ1 Γ2)) [d1;d2])
- | V_Cut d1 d2 A Γ1 Γ2 ls :
-     Valid d1 -> Valid d2 -> Claim d1 (⊦ (dual A)::Γ1) -> Claim d2 (⊦ A::Γ2) ->
-     Valid (Rule ls Cut (⊦app Γ1 Γ2) [d1;d2])
-     
-     
- | V_Ex d F G Γ1 Γ2 ls :
-      Valid d -> Claim d (⊦ app Γ1 (G::F::Γ2)) -> Valid (Rule ls Ex (⊦app Γ1 (F::G::Γ2)) [d])
-      
-      
- | V_Mu d F Γ ls :
-      Valid d -> Claim d (⊦ (bsubst 0 ($ F)%form F)::Γ) -> Valid (Rule ls Mu (⊦ ($ F)%form::Γ) [d])
-      
-      
- | V_Nu d F Γ ls :
-      Valid d -> Claim d (⊦ (bsubst 0 (€ F)%form F)::Γ) -> Valid (Rule ls Nu (⊦ (€ F)%form::Γ) [d])
-      
-      
- | V_BackEdge ls s : In s ls -> Valid (Rule ls (BackEdge s) s []) 
- 
- | V_Keep s ls R ld: Valid (Rule ls R s ld) -> Valid (Rule ls R s (map (app_deriv s) ld)) 
- (* For all upper derivations, it is ok to add the current sequent in their back-edgeable sequents list *)
- .
-
-Definition deriv_example' :=
-Rule [] Nu (⊦ [(€ (%0)⊕(%0))%form]) 
-          [
-          (
-          Rule [(⊦ [(€ (%0)⊕(%0))%form])] Or_add_l (⊦ [ ((€ (%0)⊕(%0)) ⊕ (€ (%0)⊕(%0)))%form ] )
-            [
-            (
-            Rule [⊦ [(€ (%0)⊕(%0))%form]] (BackEdge (⊦ [(€ (%0)⊕(%0))%form])) (⊦ [(€ (%0)⊕(%0))%form]) []
-            )
-            ] 
-          ) 
-          ].
-  (*
-    ----------------------------------------------------- (BackEdge (⊦vX. X⊕X))
-     [(⊦vX. X⊕X)] ⊦ (vX.X⊕X)
-    ----------------------------------------------------- (⊕l)
-     [(⊦vX. X⊕X)] ⊦ (vX.X⊕X) ⊕ (vX.X⊕X) 
-    ----------------------------------------------------- (v)
-                        [] ⊦vX. X⊕X
-    *)
-Compute level deriv_example'.
-
-Theorem thm_example: 
-  Valid (deriv_example').
-Proof.
-  repeat constructor.
-Qed.
-
-Definition context_example := [(€ (%0)⊕(%0))%form; ($ (%1)#(%0))%form].
-Compute (print_ctx context_example).
-
-Definition sequent_example := Seq context_example.
-Compute (print_seq sequent_example).
-
-Fixpoint print_list_seq (ls:list sequent) :=
-  match ls with
-  | [] => ""
-  | s::ls => (print_seq s)
-  end.
-
-Fixpoint print_deriv_list (d:derivation): list string :=
-  let '(Rule ls r s ds) := d in
-  concat (map print_deriv_list ds) ++ 
-  [string_mult "-" (String.length (print_list_seq ls ++ print_seq s)) ++ print_rule r; 
-  print_list_seq ls ++ print_seq s].
-
-Compute print_deriv_list deriv_example'.
-(** Let's prove now that [valid_deriv] is equivalent to [Valid] *)
-Hint Constructors Valid.
-
-Ltac break :=
- match goal with
- | H : match _ with true => _ | false => _ end = true |- _ =>
-   rewrite !lazy_andb_iff in H
- | H : match claim ?x with _ => _ end = true |- _ =>
-   destruct x; simpl in H; try easy; break
- | H : match map _ ?x with _ => _ end = true |- _ =>
-   destruct x; simpl in H; try easy; break
- | H : match ?x with _ => _ end = true |- _ =>
-   destruct x; simpl in H; try easy; break
- | _ => idtac
- end.
-
-Ltac rewr :=
- unfold Claim, BClosed in *;
- match goal with
- | H: _ = _ |- _ => rewrite H in *; clear H; rewr
- | _ => rewrite ?eqb_refl
- end.
-
-(* Sequent provable if it is the conclusion of an existing Valid derivation *)
-
-Definition Provable (s : sequent) :=
-  exists d, Valid d /\ Claim d s.
-
-(* Provability on sequent without any list of sequents, rule and list of premisses
-  => provability without back-edges.
-*)
-
-Inductive Pr : sequent -> Prop :=
- | R_Ax Γ A : In A Γ -> In (dual A) Γ -> Pr (⊦ Γ)
- | R_Top Γ : In ⊤ Γ -> Pr (⊦ Γ)
- | R_Bot Γ : Pr (⊦ Γ) ->
-                  Pr (⊦ ⊥::Γ)
- | R_One : Pr (⊦ [!%form])
- | R_Or_add_l Γ F G : Pr (⊦ F::Γ) -> Pr (⊦ (F⊕G)%form::Γ)
- | R_Or_add_r Γ F G : Pr (⊦ G::Γ) -> Pr (⊦ (F⊕G)%form::Γ)
- | R_Or_mult Γ F G : Pr (⊦ F::G::Γ) -> Pr (⊦ (F#G)%form::Γ)
- | R_And_add Γ F G : Pr (⊦ F::Γ) -> Pr (⊦ G::Γ) -> Pr (⊦ (F&G)%form::Γ)
- | R_And_mult Γ1 Γ2 F G : Pr (⊦ F::Γ1) -> Pr (⊦ G::Γ2) -> Pr (⊦ (F⊗G)%form::(app Γ1 Γ2))
- | R_Cut A Γ1 Γ2 : Pr (⊦ (dual A)::Γ1) -> Pr (⊦ A::Γ2) -> Pr (⊦ app Γ1 Γ2)
- | R_Ex F G Γ1 Γ2 : Pr (⊦ app Γ1 (F::G::Γ2)) -> Pr (⊦ app Γ1 (G::F::Γ2))
- | R_Mu F Γ :
-      Pr (⊦ (bsubst 0 ($ F)%form F)::Γ) -> Pr ((⊦ ($ F)%form::Γ))
- | R_Nu F Γ :
-      Pr (⊦ (bsubst 0 (€ F)%form F)::Γ) -> Pr ((⊦ (€ F)%form::Γ))
-  .
-Hint Constructors Pr.
-
-Theorem thm_example_bis:
-  Pr (⊦[((// "A")#(dual (// "A")))%form]).
-Proof.
-  apply R_Or_mult. apply (R_Ax [(// "A")%form; ~ // "A"] (// "A")%form).
-  - simpl; left; trivial.
-  - simpl; right; left; trivial.
-Qed.
-
-(* Not necessary to define alpha-equivalence for a Debruyne representation, as variables are not named anymore 
-    => no deb_rec, no alpha_eq
-    => useful to code appear_in/appear_in_b ?
-*)
