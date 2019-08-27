@@ -25,6 +25,15 @@ Proof.
  now destruct a.
 Qed.
 
+Lemma lazy_orb_false (a:bool) : a ||| false = a.
+Proof.
+ now destruct a.
+Qed.
+
+Lemma lazy_orb_iff (a b:bool) : a ||| b = true <-> a = true \/ b = true.
+Proof.
+ split; destruct a; destruct b; simpl; intuition.
+Qed.
 
 Lemma cons_app {A} (x:A) l : x::l = [x]++l.
 Proof.
@@ -86,6 +95,25 @@ Proof.
 Qed.
 
 (** List stuff *)
+
+Fixpoint OrList (l:list bool) :=
+  match l with
+  | [] => false
+  | h::l' => h ||| (OrList l')
+  end.
+
+Lemma OrListTrue : forall l, (exists x, x = true /\ In x l) <-> (OrList l = true).
+Proof.
+  induction l; split; intros.
+  - repeat destruct H. destruct H0.
+  - discriminate H.
+  - destruct H; destruct H; simpl; destruct a; trivial;
+    apply IHl; exists x; split; try assumption; simpl in H0;
+    destruct H0; subst; try discriminate H0; assumption.
+  - simpl; simpl in H; destruct a eqn:Heq.
+    -- exists a; split; try assumption; left; symmetry; assumption.
+    -- apply IHl in H; destruct H; exists x; destruct H; split; try assumption; right; assumption.
+Qed.
 
 Fixpoint list_assoc {A B}`{Eqb A} x (l:list (A*B)) :=
  match l with
@@ -328,6 +356,11 @@ Proof.
   induction n; induction m; simpl; trivial.
 Qed.
 
+Lemma max_pred : forall n m, (Nat.pred(Nat.max n m) = Nat.max (Nat.pred n) (Nat.pred m)).
+Proof.
+  induction n; induction m; simpl; trivial; rewrite Nat.max_0_r; trivial.
+Qed.
+
 Lemma le_max: forall n m, n <= Nat.max n m /\ m <= Nat.max n m.
 Proof.
    intros; omega with *.
@@ -362,7 +395,14 @@ Proof.
   intros; omega with *.
 Qed.
 
-Lemma eq_pred_S : forall n m, 1 <= n -> (Nat.pred n = m <-> n = S m).
+Lemma eq_pred_S : forall n m, Nat.pred n = m -> n <= S m.
+Proof.
+  induction n; intros.
+  - simpl in H; subst; constructor; trivial.
+  - simpl in H; subst; trivial.
+Qed.
+
+Lemma eq_pred_S' : forall n m, 1 <= n -> (Nat.pred n = m <-> n = S m).
 Proof.
   split; induction n; intros.
   - inversion H.

@@ -76,6 +76,11 @@ Notation "'ν' A" := (Quant nu A)
 
 Local Open Scope form.
 
+Definition NuFormula (f:formula) : Prop :=
+  match f with
+  | (ν _) => True
+  | _ => False
+  end.
 
 Definition Naturals:formula := (µ (!⊕(%0))).
 
@@ -89,9 +94,9 @@ Fixpoint dual (F : formula) : formula := match F with
 | ⊥ => One
 | ⊤ => Zero
 | Op Or_add G  H => Op And_add (dual G) (dual H)
-| Op Or_mult G H => Op Or_mult (dual G) (dual H)
+| Op Or_mult G H => Op And_mult (dual G) (dual H)
 | Op And_add G H => Op Or_add (dual G) (dual H)
-| Op And_mult G H => Op And_mult (dual G) (dual H)
+| Op And_mult G H => Op Or_mult (dual G) (dual H)
 | Quant mu G => Quant nu (dual G)
 | Quant nu G => Quant mu (dual G)
 end.
@@ -133,6 +138,16 @@ induction F ; simpl ;
   try reflexivity.
 - destruct o; simpl; intuition.
 - destruct q; simpl; intuition.
+Qed.
+
+Lemma op_dual : forall F1 F2 o, Op o F1 F2 <> dual (Op o F1 F2).
+Proof.
+  intros; destruct o; simpl; unfold not; intros; discriminate H.
+Qed.
+
+Lemma quant_dual : forall F q, Quant q F <> dual (Quant q F).
+Proof.
+  intros; destruct q; simpl; unfold not; intros; discriminate H.
 Qed.
 
 Definition NaturalsDual := dual Naturals.
@@ -324,26 +339,37 @@ Compute    (µ((% 0)&(!#(% 0))))%form
                                    =?
                    (µ((// "V")&(!#(// "V"))))%form.
 
-Lemma le_level_BSubst_unchanged : forall G f k n, 
-  form_level G <= n -> n <= k -> G[[ %k := f ]] = G.
+Lemma level_bsubst n (f g:formula) :
+ level f <= S n -> level g <= n ->
+ level (f[[ %n := g ]]) <= n.
 Proof.
-  induction G; intros; try destruct v; try (inversion H0; reflexivity); cbn; simpl.
- - destruct (n0 =? k) eqn:Heq; try apply eqb_eq in Heq; subst; trivial; simpl in H;
-    omega with *.
- -  apply max_le in H; destruct H;
-    try (rewrite (IHG1 _ _ n));
-    try (rewrite (IHG2 _ _ n)); try assumption;
-    trivial.
-- simpl in H;
-  rewrite (IHG f (S k) (S n)); trivial.
-  -- apply le_pred_S in H; assumption.
-  -- apply le_n_S in H0; assumption.
+  revert n.
+  induction f; intros; try destruct v; cbn; auto with arith.
+  - destruct (n0 =? n) eqn:Heq.
+    + assumption.
+    + cbn in *. inversion H; subst.
+       -- apply eqb_neq in Heq; destruct Heq; trivial.
+       -- assumption.
+  - cbn in H; simpl in H; apply max_le in H; destruct H; apply max_le; split.
+    + apply IHf1; assumption.
+    + apply IHf2; assumption.
+  - unfold level in H; simpl in H. rewrite le_pred_S in H. apply IHf in H.
+    + apply le_pred_S; assumption.
+    + constructor; assumption.
 Qed.
 
-Lemma eq_level_BSubst_unchanged : forall G f k n, 
-  form_level G = n -> n <= k -> G[[ %k := f ]] = G.
+Lemma le_level_BSubst_unchanged : forall G f n, 
+  form_level G <= n -> G[[ %n := f ]] = G.
 Proof.
-  intros; eapply le_level_BSubst_unchanged; try eassumption; rewrite H; trivial.
+  induction G; intros; try destruct v; try (inversion H0; reflexivity); cbn; simpl; trivial.
+ - destruct (n0 =? n) eqn:Heq; try apply eqb_eq in Heq; subst; trivial; simpl in H;
+    omega with *.
+ -  apply max_le in H; destruct H;
+    try (rewrite (IHG1 _ n));
+    try (rewrite (IHG2 _ n)); try assumption;
+    trivial.
+- simpl in H;
+  rewrite (IHG f (S n)); trivial; apply le_pred_S in H; assumption.
 Qed.
 
 Lemma le_level_BSubst : forall (G f:formula) k n1 n2, 
@@ -353,7 +379,7 @@ Proof.
   - unfold bsubst; simpl. 
     destruct (le_max n1 n2).
     destruct (n =? k);
-    eapply le_trans; eassumption.
+    eapply le_trans; try eassumption.
   - simpl in H. apply max_le in H. destruct H. 
     apply (IHG1 f k n1 n2) in H; try assumption.
     apply (IHG2 f k n1 n2) in H1; try assumption.
@@ -371,51 +397,21 @@ Proof.
   intros; eapply le_level_BSubst; try eassumption; try rewrite H; try rewrite H0; trivial.
 Qed.
 
-Lemma BClosed_level_bsubst: forall F G k, 
+Lemma BClosed_bsubst: forall F G k, 
   BClosed F -> F [[ %k := G ]] = F.
 Proof.
-  intros. apply (eq_level_BSubst_unchanged F G _ 0); try assumption; apply le_0_n.
+  intros. apply (le_level_BSubst_unchanged F G _); rewrite H; apply le_0_n.
 Qed.
 
-Lemma BClosed_quant_bsubst : forall q F,
-  BClosed (Quant q F) -> BClosed (F[[ %0 := Quant q F ]]).
+Lemma BClosed_quant_bsubst : forall q F G,
+  BClosed G -> BClosed (Quant q F) ->  BClosed (F[[ %0 := G ]]).
 Proof.
-  assert (Hloc: forall q o F1 F2, BClosed (F1 [[ %0 := Quant q F1 ]]) -> BClosed (F2 [[ %0 := Quant q F2 ]])
-                              -> BClosed (F1 [[ %0 := Quant q (Op o F1 F2) ]]) /\  BClosed (F2 [[ %0 := Quant q (Op o F1 F2) ]])). 
-  admit.
-  intros.
-  apply BClosed_quant in H. inversion H.
-  - unfold BClosed, level. 
-    induction F; unfold bsubst; try destruct v; simpl; trivial.
-    -- simpl in H1. injection H1 as H1. subst. rewrite eqb_refl. trivial.
-    -- simpl in H. apply max_le in H. destruct H. 
-       simpl in H1. inversion H; inversion H0.
-       + apply IHF1 in H; try assumption. apply IHF2 in H0; try assumption. 
-          unfold bsubst in H; simpl in H. unfold bsubst in H0; simpl in H0.
-          pose proof eq_level_BSubst as Lemma.
-          destruct (Lemma F1 (Quant q (Op o F1 F2)) 0 1 0); try assumption.
-          ++ simpl. omega with *.
-          ++ apply (Hloc q o F1 F2) in H; try assumption. destruct H. rewrite H, H2; trivial.
-          ++ apply (Hloc q o F1 F2) in H; try assumption. destruct H. rewrite H, H2; trivial.
-       + inversion H4. rewrite H6. apply IHF1 in H3; try assumption. 
-          apply (BClosed_level_bsubst F2 (Quant q F2) 0) in H6.
-          apply (Hloc q o F1 F2) in H3.
-          ++ destruct H3. fold level; rewrite H3. rewrite H5. trivial.
-          ++ rewrite H6. inversion H4; assumption.
-       + inversion H3. rewrite H6. apply IHF2 in H0; try assumption. 
-          apply (BClosed_level_bsubst F1 (Quant q F1) 0) in H6.
-          apply (Hloc q o F1 F2) in H0.
-          ++ destruct H0. fold level; rewrite H0. rewrite H4. trivial.
-          ++ rewrite H6. inversion H3; assumption.
-       + inversion H3; inversion H5. rewrite H7. destruct (Hloc q o F1 F2).
-          ++ apply (BClosed_level_bsubst F1 (Quant q F1) 0) in H7.
-                rewrite H7. inversion H3; assumption.
-          ++ apply (BClosed_level_bsubst F2 (Quant q F2) 0) in H8.
-                rewrite H8. inversion H5; assumption.
-          ++ rewrite H6, H9; trivial.
-    -- admit.
-  - rewrite BClosed_level_bsubst; inversion H1; assumption. 
-Admitted.
+  intros. unfold BClosed in *. assert (forall n, n <= 0 <-> n = 0). 
+   { split; intros; subst; trivial; inversion H1; trivial. }
+   apply H1; apply H1 in H0. 
+   cbn in H0; apply le_pred_S in H0; apply level_bsubst; try assumption;
+   rewrite H; trivial.
+Qed.
 
 (** Contexts *)
 
@@ -477,3 +473,66 @@ Instance : EqbSpec sequent.
 Proof.
  intros [] []. cbn. repeat (case eqbspec; try cons).
 Qed.
+
+
+
+(** Trying to characterize the number of binders in a formula *)
+
+Fixpoint FixBinders (f:formula) :=
+  match f with
+  | Quant _ G => S (FixBinders G)
+  | Op _ F1 F2 => Nat.max (FixBinders F1) (FixBinders F2)
+  | _ => 0
+  end.
+
+Inductive IndBinders: formula -> nat -> Prop :=
+  | NulBot: IndBinders ⊥ 0
+  | NulTop: IndBinders ⊤ 0
+  | NulZero: IndBinders ø 0
+  | NulOne: IndBinders ! 0
+  | NulVar v: IndBinders (Var v) 0
+  | CaseOp F1 F2 n1 n2 n o: IndBinders F1 n1 -> IndBinders F2 n2 
+                                            -> n = Nat.max n1 n2 -> IndBinders (Op o F1 F2) n
+  | Binding F q n: IndBinders F n -> IndBinders (Quant q F) (S n)
+  .
+
+Theorem FixBinders_is_IndBinders: forall n f, 
+  FixBinders f = n <-> IndBinders f n.
+Proof.
+  split; generalize dependent n; induction f; induction n; intros; 
+  try (constructor); try (discriminate H); try (inversion H; reflexivity).
+  - simpl in H; apply max_0 in H; destruct H; apply IHf1 in H; apply IHf2 in H0;
+    econstructor; try eassumption; trivial.
+ - simpl in H. inversion H. destruct (le_max (FixBinders f1) (FixBinders f2)); 
+   apply max_eq in H. rewrite H1 in *. 
+   apply (CaseOp f1 f2 (FixBinders f1) (FixBinders f2) (S n) o). 
+   -- apply (IHf1 (FixBinders f1)); trivial.
+   -- apply (IHf2 (FixBinders f2)); trivial.
+   -- symmetry; assumption.
+ - apply IHf; simpl in H; injection H as H; subst; trivial.
+ - inversion H; subst. apply IHf1 in H3; apply IHf2 in H5.
+   simpl; subst; symmetry; assumption.
+- inversion H; subst; apply IHf1 in H3; apply IHf2 in H5; simpl; subst; symmetry; assumption.
+- inversion H; subst; apply IHf in H1; simpl; subst; trivial.
+Qed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

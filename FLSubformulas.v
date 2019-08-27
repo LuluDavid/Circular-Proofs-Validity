@@ -92,41 +92,29 @@ Proof.
   unfold bsubst. simpl. rewrite Hloc. apply IHs.
 Qed.
 
-Lemma le_level_MSubst_Cons : forall (G f: formula) l k n, 
-  form_level G <= n -> n <= k -> MSubst G ((k, f)::l) = MSubst G l.
+Lemma le_level_MSubst_Cons : forall (G f: formula) l n, 
+  form_level G <= n -> MSubst G ((n, f)::l) = MSubst G l.
 Proof.
-  intros. simpl. apply (le_level_BSubst_unchanged G f k n) in H; try assumption. rewrite H; trivial.
+  intros. simpl. apply (le_level_BSubst_unchanged G f n) in H; try assumption. rewrite H; trivial.
 Qed.
 
 Lemma le_level_MSubst_All : forall G l n, 
   form_level G <= n -> (forall c, In c l -> n <= fst c) -> MSubst G l = G.
 Proof.
   induction l; trivial; intros; destruct a.
-  rewrite (le_level_MSubst_Cons G f l n0 n); try assumption.
+  rewrite (le_level_MSubst_Cons G f l n0); try assumption.
   - eapply IHl; try eassumption; intros;
     apply H0; simpl; right; assumption.
   - assert (n <= fst (n0, f)). apply H0; left; trivial.
-    simpl in H1; assumption.
-Qed.
-
-Lemma eq_level_MSubst_Cons : forall (G f: formula) l k n, 
-  form_level G = n -> n <= k -> MSubst G ((k, f)::l) = MSubst G l.
-Proof.
-  intros. eapply le_level_MSubst_Cons; try eassumption; rewrite H; trivial.
-Qed.
-
-Lemma eq_level_MSubst_All : forall G l n, 
-  form_level G <= n -> (forall c, In c l -> n <= fst c) -> MSubst G l = G.
-Proof.
-  intros. eapply le_level_MSubst_All; try eassumption; rewrite H; trivial.
+    eapply le_trans; eassumption.
 Qed.
 
 Lemma BClosed_MSubst : forall G l, BClosed G -> MSubst G l = G.
 Proof.
   induction l; intros; simpl; trivial.
-  destruct a; rewrite (le_level_BSubst_unchanged G f n 0); try apply le_0_n. 
-  - apply IHl in H; assumption.
-  - inversion H; unfold level; trivial. 
+  destruct a. rewrite le_level_BSubst_unchanged.
+  - apply IHl; assumption.
+  - rewrite H; apply le_0_n.
 Qed.
 
 
@@ -138,10 +126,10 @@ Fixpoint preFL (f:formula)(s:SubstType) : list formula :=
   | ⊥ | ⊤ | ! | ø => [f]
   | (// s) => [f] 
   | (% k) => let F := list_assoc k s in (match F with
-                                                 | None => [f]
-                                                 | Some F' => [F']
-                                                 end
-                                                 )
+                                                             | None => [f]
+                                                             | Some F' => [F']
+                                                             end
+                                                             )
   | Op o F G => (MSubst f s) :: (preFL F s) ++ (preFL G s) 
   | Quant q F => (MSubst f s) :: (preFL F ( (0, (MSubst f s)) :: (↑s)))
   end.
@@ -200,44 +188,6 @@ Compute map level (FLSet F'). (* It seems that the subformulas of a closed formu
 
 Compute (FLSet F') =? (FLSet G').
 
-Lemma preFl_Fl_fst : forall F G l, InSubstForm G l -> In G (FL F) -> In G (preFL F l).
-Proof.
-Admitted.
-
-Lemma preFl_Fl_snd : forall F G l, In G (preFL F l) -> InSubstForm G l \/ In G (FL F).
-Proof.
-  induction F; simpl; intros; try destruct v;
-  try (destruct H; destruct H; right; left; reflexivity).
-  - destruct (list_assoc n l) eqn:Heq.
-    -- left. induction l; try discriminate Heq.
-       simpl; simpl in Heq; destruct a. simpl in H; try destruct H.
-       + destruct (n=?n0)%eqb; subst; unfold InSubstForm; simpl.
-          ++ injection Heq as Heq; subst; left; trivial.
-          ++ right; apply IHl; assumption.
-       + destruct H.
-   -- simpl in H; destruct H.
-      + simpl; right; left; assumption.
-      + destruct H.
- - destruct H.
-    -- admit.
-    -- apply in_app_iff in H; rewrite in_app_iff; destruct H.
-      + apply IHF1 in H. destruct H.
-        ++ left; assumption.
-        ++ right; right; left; assumption.
-      + apply IHF2 in H. destruct H.
-        ++ left; assumption.
-        ++ right; right; right; assumption.
- - destruct H.
-    -- admit.
-    --  apply IHF in H; destruct H.
-      + simpl in H. destruct ((G =? MSubst (Quant q F) l)%eqb) eqn:Heq.
-        ++ apply eqb_eq in Heq. admit.
-        ++ admit.
-      + admit.
-Admitted.
-
-
-
 
 
 Lemma FL_refl: forall f, In f (FL f).
@@ -254,43 +204,32 @@ Qed.
 
 Local Open Scope nat_scope.
 (* We first check that F[X/µX.F] is in FL(µX.F) *)
-Lemma FL_Quant: forall q F l, BClosed (Quant q F) -> In (F [[ %0 := Quant q F ]]) (preFL (Quant q F) l).
-Proof.
-  assert (BClosed_Quant_Op: forall F1 F2 o q, BClosed (Quant q (Op o F1 F2)) 
-                                                    -> BClosed (Quant q F1) /\ BClosed (Quant q F2)). admit. 
+Lemma FL_Quant: forall q F, BClosed (Quant q F) -> In (F [[ %0 := Quant q F ]]) (FL (Quant q F)).
+Proof. 
   induction F; unfold bsubst; simpl; intros; simpl; try destruct v;
   try (right; left; reflexivity).
   - destruct (n =? 0)%eqb eqn:Heq.
     -- apply eqb_eq in Heq; subst; simpl;
-        left; apply BClosed_MSubst; assumption.
+        left; trivial.
     -- apply BClosed_quant in H. inversion H. 
       + apply eqb_neq in Heq; destruct Heq; assumption.
       + inversion H1.
-  - inversion H; apply BClosed_Quant_Op in H; destruct H. rewrite H1. 
-    rewrite in_app_iff. eapply IHF1 in H; eapply IHF2 in H0. 
-    unfold bsubst in H0; simpl in H0. 
-    unfold bsubst in H; simpl in H. right. 
-    destruct H0; destruct H; admit.
- - rewrite BClosed_MSubst; try assumption.
-   right. unfold bsubst; simpl. left. apply BClosed_quant_bsubst in H. unfold bsubst in H; simpl in H.
-   rewrite BClosed_MSubst; trivial.
+Qed.
+
+Lemma FL_BClosed : forall F G l, BClosed F -> (forall n H, list_assoc n l = Some H -> BClosed H) 
+                                                          -> In G (preFL F l) -> BClosed G.
+Proof.
+  intros; generalize dependent l; induction F; intros; try destruct v;
+  try(inversion H1; subst; trivial; inversion H2).
+  + simpl in H1. destruct (list_assoc n l) eqn:Heq.
+    - apply H0 in Heq; inversion H1; subst; try assumption; inversion H2.
+    -  inversion H1; subst; try assumption; inversion H2.
+  + admit.
+  + admit.
 Admitted.
 
-Lemma FL_Closed: forall k F l, 1 <= k -> BClosed F -> list_assoc k l = None  -> ~ In (%k) (preFL F l).
+Lemma FL_Closed: forall k F l, level F <= k -> list_assoc k l = None  -> ~ In (% k ) (preFL F l).
 Proof.
-  induction F; intros; simpl; try destruct v;
-    try (unfold not; intros; destruct H2; try discriminate H2; destruct H2; reflexivity); try discriminate H0.
-    -- unfold not; intros; destruct H2.
-      + rewrite MSubst_Op in H2; discriminate H2.
-      + apply BClosed_op in H0; destruct H0; 
-         apply in_app_iff in H2. destruct H2.
-        ++ destruct (IHF1 l); assumption.
-        ++ destruct (IHF2 l); assumption.
-   -- unfold not; intro. destruct H2.
-    + admit. (* Faisable de discriminer H2 *)
-    + apply BClosed_quant in H0. inversion H0.
-       ++ admit.
-       ++ subst. inversion H4. admit. 
 Admitted.
 
 

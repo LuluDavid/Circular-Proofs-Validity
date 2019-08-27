@@ -62,6 +62,14 @@ Qed.
  
 Local Open Scope list_scope.
 
+(* Inductive sub_address_rev: address -> address -> Prop :=
+  | SRevEmpty (a': address) : sub_address_rev [] a'
+  | SRevCons (c:allowed_chars)(a a':address) : sub_address_rev a a' -> sub_address_rev (c::a) (c::a')
+  .
+
+Definition sub_address (a a': address) := sub_address_rev (rev a)(rev a'). *)
+  
+  
 Inductive sub_address: address -> address -> Prop :=
 | SEmpty (a': address) : sub_address [] a'
 | SCons (a a' a'':address) : sub_address a a' -> sub_address (a++a'') (a'++a'')
@@ -70,15 +78,16 @@ Hint Constructors sub_address.
 
 Notation "a ⊑ b" := (sub_address a b) (at level 100). 
 
-Lemma sub_address_nil: forall a, (a ⊑ []) -> a = [].
-Proof.
-Admitted.
-
 Lemma sub_address_refl: Reflexive sub_address.
 Proof.
   red; intros; induction x; try constructor.
   apply (SCons [a] [a] x); apply (SCons [] [] [a]); constructor.
 Qed.
+
+
+Lemma sub_address_nil: forall (a:address), (a ⊑ []) -> a = [].
+Proof.
+Admitted.
 
 Lemma sub_address_trans: Transitive sub_address.
 Proof.
@@ -248,8 +257,8 @@ Compute fresh_address [[i];[r;i];[l;i];[l;r;i]].
 Fixpoint npop (n:nat)(a:address): option address :=
   match n, a with
   | 0, a' => Some a'
-  | S n, c::a' => npop n a'
-  | S n, [] => None
+  | S n', c::a' => npop n' a'
+  | S n', [] => None
   end.
 
 

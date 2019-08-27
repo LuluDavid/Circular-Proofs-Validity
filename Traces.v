@@ -1,7 +1,7 @@
 Require Import List.
 Import ListNotations.
 
-Require Import Defs Debruijn ODerivations Address Occurrences FLSubformulas.
+Require Import Utils Defs Debruijn ODerivations Address Occurrences FLSubformulas.
 Local Open Scope eqb_scope.
 
 (** PRELIMINARY APPROACH: FINITE TRACES FROM THE ROOT TO A LEAF  *)
@@ -12,11 +12,16 @@ Definition InSeq (f:formula)(s:sequent):= let '( ⊦ Γ) := s in In f Γ.
 
 Definition InSeqb (f:formula)(s:sequent):= let '( ⊦ Γ) := s in list_mem f Γ. 
 
+Lemma InSeq_is_InSeqb: forall s l, InSeq s l <-> InSeqb s l = true.
+Proof.
+  unfold InSeq, InSeqb; destruct l; symmetry; apply list_mem_in.
+Qed.
+  
 Inductive preFTrace : FTraceType -> oderivation -> Prop :=
  | Leaf f s s' ls R: s = (oseq_forget s') -> InSeq f s -> preFTrace [(f,s)] (ORule ls R s' []) 
  | ConsOne d t R ls s0 s s' f1 f2: 
                           preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
-                          -> InSeq f2 s' -> In f2 (FL f1) 
+                          -> InSeq f2 s' -> In f1 (FL f2) 
                           -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d])
  | ConsLeft d d' t R ls s0 s s' f1 f2: 
                           preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
@@ -71,49 +76,73 @@ Proof.
   repeat (constructor; simpl; intuition).
 Qed.
 
-Fixpoint OrList (l:list bool) :=
-  match l with
-  | [] => false
-  | h::l' => h ||| (OrList l')
-  end.
-
-Lemma OrListTrue : forall l, (exists x, x = true /\ In x l) <-> (OrList l = true).
-Proof.
-  induction l; split; intros.
-  - repeat destruct H. destruct H0.
-  - discriminate H.
-  - destruct H; destruct H; simpl; destruct a; trivial;
-    apply IHl; exists x; split; try assumption; simpl in H0;
-    destruct H0; subst; try discriminate H0; assumption.
-  - simpl; simpl in H; destruct a eqn:Heq.
-    -- exists a; split; try assumption; left; symmetry; assumption.
-    -- apply IHl in H; destruct H; exists x; destruct H; split; try assumption; right; assumption.
-Qed.
-
-Compute OrList [false; false; false; true].
-
 Local Open Scope eqb_scope.
 
 Fixpoint preFTraceb (t:FTraceType)(d:oderivation) : bool :=
   let '(ORule ls R s ld) := d in
-  match t with
-  | [(f,s')] => (oseq_forget s =? s') &&& (InSeqb f s')
-  | (f,s')::(g,s'')::ls' => (oseq_forget s =? s') &&& (InSeqb f s') 
-                                    &&& InFormula g (FL f) &&& OrList(map (preFTraceb ((g,s'')::ls')) ld)
-  | _ => false
+  match t, ld with
+  | [(f,s')], [] => (oseq_forget s =? s') &&& (InSeqb f s')
+  | (f,s')::(g,s'')::ls', [d'] => (oseq_forget s =? s') &&& (InSeqb f s') 
+                                    &&& list_mem g (FL f) &&& preFTraceb ((g,s'')::ls') d'
+  | (f,s')::(g,s'')::ls', [d1;d2] => (oseq_forget s =? s') &&& (InSeqb f s') 
+                                    &&& list_mem g (FL f) 
+                                    &&& (preFTraceb ((g,s'')::ls') d1 ||| preFTraceb ((g,s'')::ls') d2)
+  | _, _ => false
   end.
 
 Definition FTraceb (t:FTraceType)(d:oderivation)(a:address) :=
+  (ovalid_deriv d) && 
   match subderiv d a with
   | None       => false
-  | Some d'  => (ovalid_deriv d') &&& preFTraceb t d'
+  | Some d'  => preFTraceb t d'
   end.
 
 Compute FTraceb FTrace_example deriv_example [].
 
-Theorem FTrace_is_FTraceb : forall t d a, FTrace t d a <-> FTraceb t d a = true.
+Lemma preFTrace_is_preFtraceb : forall t d, preFTrace t d <-> preFTraceb t d = true.
 Proof.
-Admitted.
+  split; generalize dependent d; induction t; intros.
+  - inversion H.
+  - induction t.
+    -- destruct d; destruct a; simpl in *; inversion H; subst; rewrite Utils.eqb_refl. 
+        rewrite <- InSeq_is_InSeqb; assumption.
+    -- destruct d; destruct a; destruct a0; simpl in *; inversion H; subst.
+      + rewrite Utils.eqb_refl; apply InSeq_is_InSeqb in H11; rewrite H11; apply list_mem_in in H12; rewrite H12;
+         simpl; rewrite IHt; trivial.
+      + rewrite Utils.eqb_refl; apply InSeq_is_InSeqb in H11; rewrite H11; apply list_mem_in in H12; rewrite H12;
+         simpl; rewrite lazy_orb_iff; left; rewrite IHt; trivial.
+      + rewrite Utils.eqb_refl; apply InSeq_is_InSeqb in H11; rewrite H11; apply list_mem_in in H12; rewrite H12;
+         simpl; repeat rewrite lazy_orb_iff; right; rewrite IHt; trivial.
+  - destruct d; discriminate H.
+  - induction t.
+    -- destruct d; destruct a; simpl in *; destruct l0; try discriminate H; 
+        rewrite lazy_andb_iff in H; destruct H; apply Utils.eqb_eq in H; apply InSeq_is_InSeqb in H0; subst; constructor; trivial.
+    -- destruct d; destruct a; destruct a0; simpl in *; destruct l0; try discriminate H; destruct l0.
+      + repeat (rewrite lazy_andb_iff in H; destruct H); apply Utils.eqb_eq in H; 
+         apply list_mem_in in H1; apply InSeq_is_InSeqb in H2; subst.
+         constructor; trivial; apply IHt; trivial.
+      + destruct l0.
+        ++ repeat (rewrite lazy_andb_iff in H; destruct H); rewrite lazy_orb_iff in H0; destruct H0;
+             apply Utils.eqb_eq in H; apply list_mem_in in H1; apply InSeq_is_InSeqb in H2; subst.
+          --- constructor; try apply IHt; trivial.
+          --- apply ConsRight; try apply IHt; trivial.
+        ++ discriminate H.
+Qed.
+
+Theorem FTrace_is_FTraceb : forall a d t, FTrace t d a <-> FTraceb t d a = true.
+Proof.
+  unfold FTrace, FTraceb. split; intros.
+  - destruct H; rewrite andb_true_iff; rewrite ovalid_deriv_is_OValid; split; try assumption; 
+    unfold preFTraceNode in H0. 
+    destruct (subderiv d a) eqn:Heq.
+    -- apply preFTrace_is_preFtraceb; assumption.
+    -- destruct H0.
+  - apply andb_true_iff in H; destruct H; rewrite <- ovalid_deriv_is_OValid; split; try assumption;
+    unfold preFTraceNode.
+    destruct (subderiv d a) eqn:Heq.
+    -- apply preFTrace_is_preFtraceb; assumption.
+    -- discriminate H0.
+Qed.
 
 (** AN INFINITE TRACE IS A STREAM OF FINITE TRACES *)
 
@@ -123,7 +152,14 @@ CoInductive TraceType: Type :=
 
 Notation "t ;; T" := (TCons t T) (at level 60, right associativity).
 
-(* We give a few properties on streams *)
+
+
+
+
+
+
+
+(** Properties on these streams *)
 Section TraceType.
 
 Definition hd (x:TraceType) := match x with
@@ -140,7 +176,7 @@ Fixpoint Str_nth_tl (n:nat) (s:TraceType) : TraceType :=
   | S m => Str_nth_tl m (tl s)
   end.
 
-Definition Str_nth (n:nat) (s:TraceType) := hd (Str_nth_tl n s).
+Definition Str_nth (n:nat) (s:TraceType): FTraceType := hd (Str_nth_tl n s).
 
 Lemma unfold_TraceType :
  forall x:TraceType, x = match x with
@@ -231,7 +267,7 @@ Inductive Exists ( x: TraceType ) : Prop :=
   | Further : Exists (tl x) -> Exists x.
 
 CoInductive ForAll (x: TraceType) : Prop :=
-    HereAndFurther : P x -> ForAll (tl x) -> ForAll x.
+   | HereAndFurther : P x -> ForAll (tl x) -> ForAll x.
 
 Lemma ForAll_Str_nth_tl : forall m x, ForAll x -> ForAll (Str_nth_tl m x).
 Proof.
@@ -280,17 +316,8 @@ Proof.
   apply hypind.
 Qed. 
 
-Lemma ForAll_map : forall (P:TraceType -> Prop) (S:TraceType), 
-                                    ForAll (fun s => P(map s)) S <-> ForAll P (map S).
-Proof.
-Admitted. 
-
-Lemma Exists_map : forall (P:TraceType -> Prop) (S:TraceType), 
-                                    Exists (fun s => P(map s)) S -> Exists P (map S).
-Proof.
-Admitted.
-
 End TraceType.
+
 
 
 
@@ -302,12 +329,10 @@ End TraceType.
 
 (** A TRACE OF [d] IS A STREAM OF FINITE TRACES OF [d] *)
 
-Definition In' (f:formula)(c:formula*sequent) : Prop := let '( g, s ) := c in f = g.
-
 Local Open Scope eqb_scope.
 
 (* Accéder à la règle d'axiome qui clot la trace, si celle-ci est valide *)
-Fixpoint last_trace_rule (d:oderivation)(a:address) : option orule_kind :=
+Definition last_trace_rule (d:oderivation)(a:address) : option orule_kind :=
   match subderiv d a with
   | None => None
   | Some d' => let '(ORule ls R s ld) := d' in match ld with 
@@ -318,33 +343,43 @@ Fixpoint last_trace_rule (d:oderivation)(a:address) : option orule_kind :=
 
 Compute last_trace_rule deriv_example [i;i].
 
-(* We define here traces as unstoppable structures, which means every finite trace has to finish by
-    a backedge *)
+(* A Trace as a stream of elementary traces requires two   *)
 
 CoInductive Trace: TraceType -> oderivation -> Prop := 
-  | TraceCons t1 t2 n T d a1 a2: FTrace t1 d a1 -> FTrace t2 d a2 
+  | TraceCons t1 t2 n T d a1 a2: 
+                                              Trace (t2 ;; T) d
+                                              -> FTrace t1 d a1 -> FTrace t2 d a2 
                                               -> last_trace_rule d a1 = Some (BackEdge n)
-                                              -> Some a2 = npop n a2
-                                              -> Trace (t2 ;; T) d
+                                              -> npop n a1 = Some a2
                                               -> Trace (t1 ;; t2 ;; T) d.
 
 (* f appears an infinite amount of time in trace t: the problem is that a same formula can appear
     an infinite amount of time in different occurrences. By the way, if it appears an infinite amount of time
     in different occurrences, it has to appear infinitely in at least one occurrence. Thus, because we just 
     care about the formulas appearing an infinite amount of time, checking for the formulas is enough ? *)
-    
+
 Definition preInf (f:formula)(t:TraceType): Prop := 
-  forall n, exists m, (n <= m /\ List.Exists (In' f) (Str_nth m t)).
+  forall n, exists m, (n <= m) 
+                                      /\ 
+                        In f (List.map fst (Str_nth m t)).
 
 (* Same + t is a trace for oderivation d *)
 Definition Inf (f:formula)(t:TraceType)(d:oderivation): Prop := Trace t d /\ preInf f t.
 
-Definition InfMin (f:formula)(t:TraceType)(d:oderivation) : Prop := 
-  Inf f t d -> forall G, Inf G t d -> In f (FL G).
+Definition InfMin (f:formula)(t:TraceType)(d:oderivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> In f (FL G)).
 
+Lemma ExistsMin : forall t d, 
+  exists f, InfMin f t d.
+Proof.
+Admitted.
+  
+Lemma UniqueMin : forall f1 f2 t d, 
+  InfMin f1 t d -> InfMin f2 t d -> f1 = f2.
+Proof.
+Admitted.
 
-
-
+Definition ValidTrace (t:TraceType)(d:oderivation) : Prop :=
+  Trace t d /\ exists f, (InfMin f t d /\ NuFormula f).
 
 
 
