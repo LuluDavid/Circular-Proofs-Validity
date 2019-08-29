@@ -108,8 +108,19 @@ Proof.
   split; try apply equiv_refl; try apply equiv_sym; try apply equiv_trans.
 Qed.
 
-Definition disjoint_set_occ (l1 l2: list Occurrence) : Prop := forall (o1 o2: Occurrence),
-  In o1 l1 -> In o2 l2 -> disjoint (occ_addr o1)(occ_addr o2).
+Lemma list_mem_in_occ: forall F l, list_mem F (map occ_forget l) = true <-> exists a, In {F,a} l.
+Proof.
+  split; induction l; intros.
+  - inversion H.
+  - simpl in H; apply lazy_orb_iff in H; destruct H.
+    + apply Utils.eqb_eq in H; destruct a; exists a; simpl in *; subst; left; trivial.
+    + apply IHl in H; destruct H; exists x; right; trivial.
+  - inversion H; inversion H0.
+  - destruct H; simpl in *; apply lazy_orb_iff; destruct H.
+    + rewrite H; left; simpl; apply Utils.eqb_refl.
+    + right; apply IHl; exists x; trivial.
+Qed.
+
 
 
 (** ADAPTATION OF DERIVATIONS FOR OCCURRENCES **)
@@ -123,6 +134,9 @@ Instance: EqbSpec ocontext.
 Proof.
   apply eqbspec_list.
 Qed.
+
+
+
 (** Sequent *)
 
 Fixpoint ocontext_forget Γ : list formula := map occ_forget Γ.
@@ -137,6 +151,8 @@ Notation "⊢ Γ" := (SeqO Γ) (at level 100).
 Fixpoint oseq_forget (s:osequent): sequent := let '(⊢ Γ) := s in (⊦ (ocontext_forget Γ)).
 
 Fixpoint oseq_addr (s:osequent): list address := let '(⊢ Γ) := s in ocontext_addr Γ.
+
+
 
 
 Local Open Scope string_scope.
@@ -163,6 +179,9 @@ Proof.
   intros [] []. cbn. repeat (case eqbspec; try cons).
 Qed.
 
+
+
+
 (* A prop asserting that 2 sequents have the same formulas in the same order *)
 
 Definition oseq_equiv (s1 s2: osequent) : Prop := (oseq_forget s1) = (oseq_forget s2).
@@ -178,6 +197,24 @@ Proof.
 Qed.
 
 Definition octx_example := [{ (µ((% 0)&(!#(% 0)))), [i;l;r] };{ (ν(µ((% 1)&(!#(% 0))))), [] }].
+
+Definition option_oseq_equiv (s1 s2:option osequent): Prop := 
+   match s1, s2 with
+   | Some s1, Some s2 => oseq_equiv s1 s2
+   | _, _ => False
+   end.
+
+Definition option_oseq_equivb (s1 s2:option osequent): bool := 
+   match s1, s2 with
+   | Some s1, Some s2 => oseq_equivb s1 s2
+   | _, _ => false
+   end.
+
+Lemma opt_oseq_equiv_is_opt_oseq_equivb: forall (s1 s2: option osequent), 
+  option_oseq_equiv s1 s2 <-> option_oseq_equivb s1 s2 = true.
+Proof.
+  destruct s1; destruct s2; simpl; intuition; apply oseq_equiv_is_oseq_equivb; trivial.
+Qed.
 
 Compute level ctx_example.
 
@@ -247,9 +284,7 @@ Definition rule '(ORule _ R _ _) := R.
 
 Definition premisses '(ORule _ _ _ ld) := ld.
 
-(** Utility functions on derivations:
-    - bounded-vars level (used by the [BClosed] predicate),
-    - check w.r.t. signature *)
+(** Utility functions on derivations *)
 
 Instance level_oderivation : Level oderivation :=
  fix level_oderivation d :=
@@ -262,22 +297,18 @@ Fixpoint combine_eq_length (l l' : list oderivation) :=
         | false => None
       end.
 
-Fixpoint AndList (l:list bool) :=
-  match l with
-  | [] => true
-  | x::l' => x && AndList l'
-  end.
-
-(* Instance eqb_oderivation : Eqb oderivation :=
+Instance ls_eqb : Eqb (nat*osequent) :=
+  fix ls_eqb ls1 ls2 :=
+    let (n1, s1) := ls1 in (let (n2, s2) := ls2 in (n1 =? n2) && (s1 =? s2)).
+    
+Instance eqb_oderivation : Eqb oderivation :=
   fix eqb_oderivation d1 d2 :=
     let '(ORule ls1 R1 s1 ld1) := d1 in 
     let '(ORule ls2 R2 s2 ld2) := d2 in 
-     (ls1 =? ls2) && (R1 =? R2) && (s1 =? s2) && 
-     let lco := (combine_eq_length ld1 ld2) in
-     match lco with
-     | Some l' => AndList (map (prod_curry eqb_oderivation) l')
-     | None   => false
-     end. *)
+     (ls1 =? ls2) &&& (R1 =? R2) &&& (s1 =? s2) &&& 
+     if (length ld1 =? length ld2)
+     then (list_forallb2 eqb_oderivation ld1 ld2)
+     else false.
      
 Instance bsubst_oderiv : BSubst oderivation :=
  fix bsubst_oderiv n f d :=
@@ -288,22 +319,6 @@ Instance obsubst_oderiv : OBSubst oderivation :=
  fix obsubst_oderiv n o d :=
  let '(ORule ls R s ds) := d in
  ORule ls R (obsubst n o s ) (map (obsubst_oderiv n o) ds).
-
-(** Induction principle on derivations with correct
-    handling of sub-derivation lists. *)
-
-Lemma oderivation_ind' (P: oderivation -> Prop) :
-  (forall ls r s ds, Forall P ds -> P (ORule ls r s ds)) ->
-  forall d, P d.
-Proof.
- intros Step.
- fix IH 1. destruct d as (ls,r,s,ds).
- apply Step.
- revert ds.
- fix IH' 1. destruct ds; simpl; constructor.
- apply IH.
- apply IH'.
-Qed.
 
 Definition OClaim d s := oclaim d = s.
 Arguments OClaim _ _ /.

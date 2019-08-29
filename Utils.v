@@ -115,6 +115,12 @@ Proof.
     -- apply IHl in H; destruct H; exists x; destruct H; split; try assumption; right; assumption.
 Qed.
 
+Fixpoint AndList (l:list bool) :=
+  match l with
+  | [] => true
+  | x::l' => x && AndList l'
+  end.
+
 Fixpoint list_assoc {A B}`{Eqb A} x (l:list (A*B)) :=
  match l with
  | [] => None
@@ -150,7 +156,7 @@ Fixpoint list_index {A} `{Eqb A} (x:A) l : option nat :=
   | y::l => if x =? y then Some 0
             else option_map S (list_index x l)
   end.
-
+  
 Fixpoint list_max l :=
   match l with
   | [] => 0
@@ -170,6 +176,73 @@ Proof.
  case IHx; cons.
 Defined.
 
+Fixpoint list_permutb {A} `{EqbSpec A} (l1 l2: list A): bool :=
+  match l1, l2 with
+  | [], [] => false
+  | [_], [_] => false
+  | (x1::l1'), (x2::l2') => match l1', l2' with
+                                       | (x1'::l1''), (x2'::l2'') 
+                                                => ((x1 =? x2') &&& (x1' =? x2) &&& (l1'' =? l2'')) ||| ((x1 =? x2) &&& list_permutb l1' l2')
+                                       | _, _ => false
+                                      end 
+  | _, _ => false
+  end.
+
+Lemma list_permutb_pattern {A} `{EqbSpec A}: forall l1 l2 a1 a2,
+  list_permutb (l1 ++ a1 :: a2 :: l2)(l1 ++ a2 :: a1 :: l2) = true.
+Proof.
+  intros. generalize dependent l1.
+  induction l2; intros; induction l1.
+  - simpl; repeat rewrite eqb_refl; trivial.
+  - simpl. destruct (l1 ++ [a1; a2]) eqn:Heq.
+    + destruct l1; inversion Heq.
+    + destruct (l1 ++ [a2; a1]) eqn:Heq'.
+      ++ destruct l1; inversion Heq'.
+      ++ apply lazy_orb_iff; right; rewrite eqb_refl; assumption.
+  - repeat rewrite app_nil_l; simpl; rewrite lazy_orb_iff; left; repeat rewrite eqb_refl; trivial.
+  - simpl. destruct (l1 ++ a1 :: a2 :: a :: l2) eqn:Heq.
+    + destruct l1; inversion Heq.
+    + destruct (l1 ++ a2 :: a1 :: a :: l2) eqn:Heq'.
+      ++ destruct l1; inversion Heq'.
+      ++ rewrite lazy_orb_iff; right; rewrite eqb_refl; assumption.
+Qed.
+  
+Definition list_permut {A} `{EqbSpec A} (l1 l2:list A): Prop :=
+  exists a1 a2 h t, l1 = h ++ a1 :: a2 :: t /\ l2 = h ++ a2 :: a1 :: t.
+
+Lemma list_permutb_is_list_permut {A} `{EqbSpec A}:
+  forall (l1 l2: list A), list_permutb l1 l2 = true <->  list_permut l1 l2.
+Proof.
+  split.
+  - destruct l1; destruct l2; intros; try discriminate H1.
+    + destruct l1; discriminate H1.
+    + simpl in H1. revert dependent l2; revert a; revert a0. induction l1; destruct l2;
+       try (intro; discriminate H1);
+       intro; rewrite lazy_orb_iff in H1; destruct H1.
+       * repeat rewrite lazy_andb_iff in H1; repeat rewrite eqb_eq in H1.
+            destruct H1; destruct H1; subst; exists a2, a0, [], l2; intuition.
+       * simpl in H1; rewrite lazy_andb_iff in H1; destruct H1; apply IHl1 in H2;
+         apply eqb_eq in H1; subst;
+         destruct H2; destruct H1; destruct H1; destruct H1; destruct H1; rewrite H1; rewrite H2;
+         exists x, x0, (a0 :: x1), x2; intuition.
+  - unfold list_permut; intros; destruct H1; destruct H1; destruct H1; destruct H1; destruct H1; subst;
+    apply list_permutb_pattern.
+Qed.
+
+Lemma app_one_nil{A}: forall (c:A) (a:list A), not (a ++ [c] = []).
+Proof.
+  intros; unfold not; intros; destruct (app_cons_not_nil a [] c); symmetry; assumption.
+Qed.
+
+Lemma injection_rev{A}: forall (c1 c2:A) (a1 a2:list A), 
+      a1 ++ [c1] = a2 ++ [c2] -> a1 = a2 /\ c1 = c2.
+Proof.
+  induction a1; induction a2; intros; split; injection H as H; subst; trivial;
+  try(destruct (app_one_nil c2 a2); symmetry; assumption);
+  try(destruct (app_one_nil c1 a1); assumption);
+  apply IHa1 in H0; destruct H0; subst; trivial.
+Qed.
+
 Lemma list_mem_in {A}`{EqbSpec A} (l : list A) x :
  list_mem x l = true <-> In x l.
 Proof.
@@ -178,6 +251,13 @@ Proof.
  - case eqbspec.
    + intros <-. intuition discriminate.
    + rewrite IH. intuition.
+Qed.
+
+Lemma InDec {A}`{EqbSpec A}: forall (l: list A)(a:A), (In a l) \/ ~ (In a l).
+Proof.
+  intros; destruct (list_mem a l) eqn:Heq.
+  - apply list_mem_in in Heq; left; trivial.
+  - right; unfold not; intro; apply list_mem_in in H1; rewrite H1 in Heq; discriminate Heq.
 Qed.
 
 Lemma list_assoc_in {A B}`{EqbSpec A} (l : list (A*B)) x :
@@ -376,9 +456,17 @@ Proof.
  omega with *.
 Qed.
 
-Lemma max_eq n m p : Nat.max n m = p <-> n = p \/ m = p.
+Lemma max_eq n m p : Nat.max n m = p -> n = p \/ m = p.
 Proof.
-Admitted.
+  intros.
+  generalize dependent p; generalize dependent m; induction n; intros.
+  + simpl in H; right; assumption.
+  + destruct m.
+    ++ simpl in H; left; trivial.
+    ++ rewrite <- max_S in H; destruct p.
+      +++ discriminate H.
+      +++ injection H as H. apply IHn in H. destruct H; subst; intuition.
+Qed.
 
 Lemma max_lt n m p : Nat.max n m < p <-> n < p /\ m < p.
 Proof.
@@ -485,6 +573,8 @@ Lemma forallb_map {A B} (f: B -> bool) (g: A -> B) l :
 Proof.
  induction l; simpl; f_equal; auto.
 Qed.
+
+(** Logic *)
 
 Theorem contrapositive : forall (P Q : Prop),
   (P -> Q) -> (~Q -> ~P).

@@ -62,36 +62,46 @@ Qed.
  
 Local Open Scope list_scope.
 
-(* Inductive sub_address_rev: address -> address -> Prop :=
+Inductive sub_address_rev: address -> address -> Prop :=
   | SRevEmpty (a': address) : sub_address_rev [] a'
   | SRevCons (c:allowed_chars)(a a':address) : sub_address_rev a a' -> sub_address_rev (c::a) (c::a')
   .
 
-Definition sub_address (a a': address) := sub_address_rev (rev a)(rev a'). *)
-  
-  
-Inductive sub_address: address -> address -> Prop :=
-| SEmpty (a': address) : sub_address [] a'
-| SCons (a a' a'':address) : sub_address a a' -> sub_address (a++a'') (a'++a'')
-.
-Hint Constructors sub_address.
+Definition sub_address (a a': address) := sub_address_rev (rev a)(rev a').
+Hint Unfold sub_address.
 
 Notation "a ⊑ b" := (sub_address a b) (at level 100). 
 
 Lemma sub_address_refl: Reflexive sub_address.
 Proof.
-  red; intros; induction x; try constructor.
-  apply (SCons [a] [a] x); apply (SCons [] [] [a]); constructor.
+  red; intros; unfold sub_address; induction x; simpl.
+  - constructor.
+  -  induction (rev x ++ [a]); constructor; assumption.
 Qed.
-
 
 Lemma sub_address_nil: forall (a:address), (a ⊑ []) -> a = [].
 Proof.
-Admitted.
+  unfold sub_address; intros; simpl in H; inversion H; subst; rewrite <- (rev_involutive a), <- H1; trivial.
+Qed.
+
+Lemma sub_address_rev_nil: forall (a:address), (sub_address_rev a []) -> a = [].
+Proof.
+  intros; rewrite <- (rev_involutive a) in H; apply sub_address_nil in H; rewrite <- (rev_involutive a), H; trivial. 
+Qed.
+
+Lemma sub_address_rev_trans: Transitive sub_address_rev.
+Proof.
+  red. intros. generalize dependent H0; generalize dependent z; induction H; intros.
+  - constructor.
+  - induction z.
+    + inversion H0.
+    + inversion H0; subst; constructor. apply IHsub_address_rev; assumption.
+Qed.
 
 Lemma sub_address_trans: Transitive sub_address.
 Proof.
-Admitted.
+  red. unfold sub_address. intros. eapply sub_address_rev_trans; eassumption. 
+Qed.
 
 Fixpoint sub_addressb (a a': address): bool :=
   match a, a' with
@@ -116,27 +126,58 @@ Proof.
     + apply Utils.eqb_eq in H. injection H as H1; subst. left; apply Utils.eqb_refl.
     + right. apply IHa'. assumption.
 Qed.
- 
+
+Lemma sub_address_app_char_bis: forall a1 a2 c1 c2,
+     sub_addressb (a1 ++ [c1]) (a2 ++ [c2]) = true -> c1 = c2 /\ (sub_addressb a1 a2 = true). 
+Proof.
+  intros. split.
+  - generalize dependent a2; induction a1; induction a2; intros.
+    + simpl in H; apply orb_true_iff in H; destruct H; try discriminate H;
+       apply Utils.eqb_eq in H; injection H as H; subst; trivial.
+    + simpl in H; apply orb_true_iff in H; destruct H.
+      ++ apply Utils.eqb_eq in H. injection H as H;
+           destruct (app_one_nil c2 a2); symmetry; trivial.
+      ++ apply IHa2; assumption.
+    + simpl in H; apply orb_true_iff in H; destruct H.
+      ++ apply Utils.eqb_eq in H. injection H as H;
+           destruct (app_one_nil c1 a1); trivial.
+      ++ discriminate H.
+    + simpl in H; apply orb_true_iff in H; destruct H.
+      ++ apply Utils.eqb_eq in H; injection H as H; apply (IHa1 a2); 
+            rewrite H0; apply sub_addressb_refl.
+      ++ apply IHa2; assumption.
+  - generalize dependent a2; induction a1; induction a2; intros; try reflexivity.
+    + inversion H; apply orb_true_iff in H1; destruct H1.
+      ++ apply Utils.eqb_eq in H0; injection H0 as H0; destruct (app_one_nil c1 a1); assumption.
+      ++ discriminate H0.
+    + simpl in H; apply orb_true_iff in H; destruct H.
+      ++ apply Utils.eqb_eq in H; injection H as H. apply injection_rev in H0; destruct H0; subst;
+           apply sub_addressb_refl.
+      ++ apply IHa2 in H. simpl. apply orb_true_iff. right; assumption.
+Qed.
+
+Lemma sub_address_rev_is_sub_addressb_reversed: forall (a a':address),
+  sub_address_rev a a' <-> (sub_addressb (rev a) (rev a') = true).
+Proof.
+  split.
+  - intros; induction H; subst.
+    + simpl; destruct (rev a'); reflexivity.
+    + simpl; apply sub_address_app_char; assumption.
+  - intros; generalize dependent a'; induction a; intros; induction a'; try constructor.
+    + inversion H; destruct (rev a0 ++ [a]) eqn:Heq; 
+       try discriminate H1; destruct (app_one_nil a (rev a0)); assumption.
+    + simpl in *. inversion H; apply sub_address_app_char_bis in H. 
+       destruct H; subst; constructor. apply IHa; assumption.
+Qed.
+
 Lemma sub_address_is_sub_addressb: forall (a a':address), 
   sub_address a a' <-> (sub_addressb a a' = true).
 Proof.
-  split.
-  - intros. induction H as [a|a a' a'' H]; simpl.
-    -- destruct a; trivial. 
-    -- generalize dependent a; generalize dependent a'; induction a''; intros.
-      --- rewrite app_nil_r, app_nil_r; assumption.
-      --- rewrite cons_app, app_assoc, app_assoc.
-          apply (IHa'' (a' ++ [a]) (a0 ++ [a])).
-          + constructor; assumption.
-          + apply sub_address_app_char; assumption.
-  - intros. generalize dependent a; induction a'; induction a; intros; 
-    try (constructor; reflexivity); try (inversion H);
-    try(destruct a; simpl in H; try constructor; apply orb_true_iff in H; destruct H; 
-          try(apply Utils.eqb_eq in H; rewrite H; apply sub_address_refl);
-          apply IHa' in H; eapply sub_address_trans; try eassumption;
-            rewrite <- (app_nil_l a'); try (apply (SCons _ [l] a'); constructor);
-                                                     try (apply (SCons _ [r] a'); constructor);
-                                                     try (apply (SCons _ [i] a'); constructor)).
+  unfold sub_address; split; intros.
+  - rewrite <- (rev_involutive a), <- (rev_involutive a'); 
+    apply sub_address_rev_is_sub_addressb_reversed in H; assumption.
+  - rewrite <- (rev_involutive a), <- (rev_involutive a') in H; 
+    apply sub_address_rev_is_sub_addressb_reversed in H; assumption. 
 Qed.
 
 Definition disjoint (a a': address): Prop := ~(sub_address a a') /\ ~(sub_address a' a).
@@ -221,7 +262,7 @@ Proof.
       +  apply IH; assumption.
 Qed.
   
-(* Generate an address that would conserve the disjointness of the set if apppended :
+(* Generate an address that would conserve the disjointness of the set if appended :
     As the addresses are already disjoint, it is just necessary to take the longest one 
     and change the last character.
     You just have to notice that if an address (c::list) has length n, you cannot have the same 

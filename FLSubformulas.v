@@ -2,7 +2,7 @@ Require Import Arith.
 Require Export Setoid Morphisms RelationClasses Arith Omega Bool String MSetRBT StringOrder List Utils.
 Require DecimalString.
 Import ListNotations.
-Require Import Defs Debruijn Subformulas.
+Require Import Utils Defs Debruijn Subformulas.
 Local Open Scope eqb_scope.
 Local Open Scope list_scope.
 Local Open Scope formula_scope.
@@ -188,23 +188,24 @@ Compute map level (FLSet F'). (* It seems that the subformulas of a closed formu
 
 Compute (FLSet F') =? (FLSet G').
 
+Notation "F ≪ G" := (In F (FL G)) (at level 100).
 
 
-Lemma FL_refl: forall f, In f (FL f).
+Lemma FL_refl: forall f, f ≪ f.
 Proof.
   induction f; simpl; try destruct v; try (left; reflexivity).
 Qed.
 
 Local Open Scope eqb_scope.
 
-Lemma FL_Op: forall o F1 F2 G, In G (FL (Op o F1 F2)) -> G = Op o F1 F2 \/ In G (FL F1) \/ In G (FL F2).
+Lemma FL_Op: forall o F1 F2 G, (G ≪ Op o F1 F2) -> (G = Op o F1 F2) \/ (G ≪ F1) \/ (G ≪ F2).
 Proof.
   intros; simpl in H; destruct H; intuition.
 Qed.
 
 Local Open Scope nat_scope.
 (* We first check that F[X/µX.F] is in FL(µX.F) *)
-Lemma FL_Quant: forall q F, BClosed (Quant q F) -> In (F [[ %0 := Quant q F ]]) (FL (Quant q F)).
+Lemma FL_Quant: forall q F, BClosed (Quant q F) -> (F [[ %0 := Quant q F ]]) ≪ (Quant q F).
 Proof. 
   induction F; unfold bsubst; simpl; intros; simpl; try destruct v;
   try (right; left; reflexivity).
@@ -216,16 +217,61 @@ Proof.
       + inversion H1.
 Qed.
 
+Theorem subform_dec : forall F G, (F ≪ G) \/ (~ (F ≪ G)).
+Proof.
+  intros; pose proof (@InDec formula);
+  eapply H; apply eqbspec_formula. 
+Qed.
+
+
+Lemma preFL_FL: forall F G l, In G (preFL F l) -> (G ≪ F) \/ InSubstForm G l.
+Proof.
+  assert (Hloc': forall F l, (exists n, list_assoc n l = Some F) <-> InSubstForm F l). admit.
+  intros. generalize dependent G; generalize dependent l;
+  induction F; intros; try destruct v;
+  try(simpl in H; destruct H; subst; try (left; apply FL_refl); destruct H).
+  - simpl in H; destruct (list_assoc n l) eqn:Heq.
+    + simpl in H; destruct H; right; subst; apply Hloc'; exists n; trivial; destruct H.
+    +  simpl in H; left; trivial.
+  - admit.
+  - simpl. simpl in H. destruct H.
+    + admit.
+    + admit. 
+Admitted.
+
+
+
+
+
 Lemma FL_BClosed : forall F G l, BClosed F -> (forall n H, list_assoc n l = Some H -> BClosed H) 
                                                           -> In G (preFL F l) -> BClosed G.
 Proof.
+  assert (Hloc: forall F G l, In G (preFL F l) -> In G (FL F) \/ InSubstForm G l). admit.
+  assert (Hloc': forall F l, (exists n, list_assoc n l = Some F) <-> InSubstForm F l). admit.
   intros; generalize dependent l; induction F; intros; try destruct v;
   try(inversion H1; subst; trivial; inversion H2).
   + simpl in H1. destruct (list_assoc n l) eqn:Heq.
     - apply H0 in Heq; inversion H1; subst; try assumption; inversion H2.
     -  inversion H1; subst; try assumption; inversion H2.
-  + admit.
-  + admit.
+  + simpl in H1; destruct H1.
+    - rewrite BClosed_MSubst in H1; trivial; subst; trivial.
+    - apply in_app_iff in H1; apply BClosed_op in H; destruct H; destruct H1.
+      -- eapply IHF1 in H; eassumption.
+      -- eapply IHF2 in H2; eassumption.
+  + simpl in H1; destruct H1.
+    - rewrite BClosed_MSubst in H1; trivial; subst; trivial.
+    - rewrite BClosed_MSubst in H1; trivial.
+      assert (HClone: BClosed (Quant q F)). { assumption. }
+      apply BClosed_quant in H. inversion H.
+      ++ clear H. apply Hloc in H1. destruct H1.
+           +++ admit.
+           +++ unfold InSubstForm in H; simpl in H; destruct H.
+            -- subst; trivial.
+            -- apply Hloc' in H. destruct H. apply (H0 (Nat.pred x)). admit.
+      ++ clear H. inversion H3. clear H2 H3. eapply (IHF _ ((0, Quant q F) :: ↑ l)); try eassumption.
+           intros. destruct n.
+           +++ simpl in H2; injection H2 as H2; subst; trivial.
+           +++ simpl in H2. apply (H0 n). rewrite list_assoc_lift in H2. trivial.
 Admitted.
 
 Lemma FL_Closed: forall k F l, level F <= k -> list_assoc k l = None  -> ~ In (% k ) (preFL F l).

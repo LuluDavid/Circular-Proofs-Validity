@@ -150,6 +150,14 @@ Proof.
   intros; destruct q; simpl; unfold not; intros; discriminate H.
 Qed.
 
+Lemma dual_var : forall F, F = dual F -> exists v, F = Var v.
+Proof.
+  destruct F; intros; try discriminate H. 
+  - simpl in H; exists v; trivial.
+  - destruct (op_dual F1 F2 o); assumption.
+  - destruct (quant_dual F q); assumption.
+Qed.
+
 Definition NaturalsDual := dual Naturals.
 
 
@@ -455,7 +463,7 @@ Proof.
  - case eqbspec; cons.
 Qed.
 
-Instance : EqbSpec formula.
+Instance eqbspec_formula: EqbSpec formula.
 Proof.
   red.
   fix IH 1. induction x as [ | | | |V|Op F1 IH1 F2 IH2|Quant F IH']; destruct y eqn: Hy; 

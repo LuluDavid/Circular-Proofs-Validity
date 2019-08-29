@@ -95,8 +95,6 @@ Qed.
 
 Local Open Scope string_scope.
 
-Notation "F ≪ G" := (Suboccurrence G F) (at level 100).
-
 Definition f1 : Occurrence := { // "X", [r;i;i] }.
 Definition f2 : Occurrence := { µ (%0 & (// "X")), [i] }.
 

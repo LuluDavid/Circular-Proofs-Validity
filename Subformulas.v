@@ -183,13 +183,17 @@ Proof.
   apply (subform_b_trans x y z); assumption.
 Qed.
   
-Theorem subform_dec : forall F G, {Subform F G} + {~ (Subform F G)}.
+Theorem subform_dec : forall F G, (F ⧼ G) \/ (~ (F ⧼ G)).
 Proof.
   intros.
-  case_eq (subform_b F G) ; intros.
+  case_eq (subform_b G F) ; intros.
   apply subform_b_is_subform in H ; left ; assumption.
   right ; intro ; apply subform_b_is_subform in H0 ; rewrite H in H0 ; apply diff_false_true in H0 ; contradiction.
 Qed.
+
+Theorem subform_antisymmetric: Antisymmetric formula _ Subform.
+Proof.
+Admitted.
 
 
 (** LINK WITH SUBOCCURRENCES *)

@@ -1,7 +1,7 @@
 Require Import List.
 Import ListNotations.
 
-Require Import Utils Defs Debruijn ODerivations Address Occurrences FLSubformulas.
+Require Import Utils Defs Debruijn ODerivations Address Occurrences Subformulas FLSubformulas.
 Local Open Scope eqb_scope.
 
 (** PRELIMINARY APPROACH: FINITE TRACES FROM THE ROOT TO A LEAF  *)
@@ -366,22 +366,26 @@ Definition preInf (f:formula)(t:TraceType): Prop :=
 (* Same + t is a trace for oderivation d *)
 Definition Inf (f:formula)(t:TraceType)(d:oderivation): Prop := Trace t d /\ preInf f t.
 
-Definition InfMin (f:formula)(t:TraceType)(d:oderivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> In f (FL G)).
+Definition InfMin (f:formula)(t:TraceType)(d:oderivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> f ⧼ G).
 
-Lemma ExistsMin : forall t d, 
-  exists f, InfMin f t d.
-Proof.
-Admitted.
-  
+
 Lemma UniqueMin : forall f1 f2 t d, 
   InfMin f1 t d -> InfMin f2 t d -> f1 = f2.
 Proof.
-Admitted.
+  intros. destruct H; destruct H0.
+  apply subform_antisymmetric.
+  - apply H2; assumption.
+  - apply H1; assumption.
+Qed.
 
 Definition ValidTrace (t:TraceType)(d:oderivation) : Prop :=
   Trace t d /\ exists f, (InfMin f t d /\ NuFormula f).
 
+Definition ValidityCriteria (d:oderivation): Prop :=
+  forall (t:TraceType), Trace t d -> exists f, (InfMin f t d /\ NuFormula f).
 
+Definition DecidableValidity : Prop :=
+  forall (d:oderivation), (ValidityCriteria d) \/ ~ (ValidityCriteria d).
 
 
 
