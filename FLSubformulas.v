@@ -27,12 +27,6 @@ Fixpoint lift (s:SubstType): SubstType :=
 
 Notation "↑ s" := (lift s) (at level 50).
 
-Fixpoint Subst (s:SubstType) : Prop :=
-  match s with
-  | [] => False
-  | (n, F)::s' => list_assoc n s' = None /\ Subst s'
-  end.
-  
 Lemma list_assoc_lift : forall n s, list_assoc (S n) (↑s) = list_assoc n s.
 Proof.
   induction s; simpl; trivial.
@@ -74,7 +68,8 @@ Qed.
 
 
 
-(* Substitution of several bound variables in f (by their associated formulas in s) *)
+
+(** MULTIPLE SUBSTITUTION *)
 
 Fixpoint MSubst(f:formula)(s:SubstType) : formula :=
   match s with
@@ -145,7 +140,11 @@ Proof.
   apply BClosed_MSubst; trivial.
 Qed.
 
-(* FL f returns the list of FL-subformulas of F *)
+
+
+
+
+(** FL = LIST OF FL-SUBFORMULAS *)
 
 Fixpoint preFL (f:formula)(s:SubstType) : list formula :=
   match f with
@@ -159,6 +158,11 @@ Fixpoint preFL (f:formula)(s:SubstType) : list formula :=
   | Op o F G => (MSubst f s) :: (preFL F s) ++ (preFL G s) 
   | Quant q F => (MSubst f s) :: (preFL F ( (0, (MSubst f s)) :: (↑s)))
   end.
+
+
+
+
+(** GETSUBST RETURNS THE FINAL SUBST LIST *)
 
 Fixpoint preGetSubst (f:formula)(s:SubstType) : SubstType :=
   match f with
@@ -175,14 +179,19 @@ Fixpoint preGetSubst (f:formula)(s:SubstType) : SubstType :=
 
 Definition FL (f:formula) := preFL f [].
 
-Definition list_assocSubst (f:formula) := preGetSubst f [].
+Definition getSubst (f:formula) := preGetSubst f [].
 
 Fixpoint InSubst (p:nat*formula) lp : bool :=
   match lp with
   | [] => false
   | (n,f)::fs => let (m,g) := p in ((m =? n) && (f =? g))  || InSubst p fs
   end.
-  
+
+
+
+
+(** FUNCTIONS TO REMOVE DUPLICATAS *)
+
 Fixpoint noDupFormula (l : list formula) : list formula :=
     match l with
       | [] => []
@@ -197,7 +206,14 @@ Fixpoint noDupSubst (s:SubstType) : SubstType :=
 
 Definition FLSet (f:formula) := rev (noDupFormula (FL f)).
 
-Definition list_assocSubstSet (f:formula) := noDupSubst (list_assocSubst f).
+Definition getSubstSet (f:formula) := noDupSubst (getSubst f).
+
+
+
+
+
+
+
 
 Local Open Scope string_scope.
 Definition exampleFL1: formula :=  (%1) & (! # (// "X")).
@@ -214,7 +230,15 @@ Compute map level (FLSet F'). (* It seems that the subformulas of a closed formu
 
 Compute (FLSet F') =? (FLSet G').
 
+
+
+
+
+
 Notation "F ≪ G" := (In F (FL G)) (at level 100).
+
+
+
 
 
 Lemma FL_refl: forall f, f ≪ f.
@@ -236,7 +260,7 @@ Proof.
 Qed.
 
 Local Open Scope nat_scope.
-(* We first check that F[X/µX.F] is in FL(µX.F) *)
+
 Lemma FL_Quant: forall q F, BClosed (Quant q F) -> (F [[ %0 := Quant q F ]]) ≪ (Quant q F).
 Proof. 
   induction F; unfold bsubst; simpl; intros; simpl; try destruct v;
@@ -272,8 +296,8 @@ Proof.
 Admitted.
 
 
-Local Open Scope eqb_scope.
 
+Local Open Scope eqb_scope.
 
 Lemma FL_BClosed : forall F G l, BClosed F -> (forall n H, list_assoc n l = Some H -> BClosed H) 
                                                           -> In G (preFL F l) -> BClosed G.

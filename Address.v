@@ -6,8 +6,13 @@ Import Bool.
 Local Open Scope string_scope.
 Local Open Scope eqb_scope.
 
+
+
+ (** ADDRESSES *)
+ 
 Inductive allowed_chars : Type := l | r | i.
 Definition address : Type := list allowed_chars. 
+
 (* For a matter of complexity, we will work here with reversed order addresses *)
 
 Fixpoint print_address (a:address) := 
@@ -35,6 +40,8 @@ Qed.
 Delimit Scope chars_scope with ac.
 Bind Scope chars_scope with allowed_chars.
 
+(** DUAL *)
+
 Fixpoint addr_dual (a:address): address :=
   match a with
   | [] => []
@@ -57,7 +64,7 @@ Qed.
 (** BASIC PROPERTIES ON ADDRESSES **)
 
 (* a sub-adress of a'
-   CARREFUL: Prefix becomes Suffix here because we reversed the address order
+ CARREFUL: Prefix becomes Suffix here because we reversed the address order
  *)
  
 Local Open Scope list_scope.
@@ -180,6 +187,14 @@ Proof.
     apply sub_address_rev_is_sub_addressb_reversed in H; assumption. 
 Qed.
 
+
+
+
+
+(** DISJOINTNESS *)
+
+(* Two Addresses *)
+
 Definition disjoint (a a': address): Prop := ~(sub_address a a') /\ ~(sub_address a' a).
 
 Lemma disjoint_not_refl: forall a a', a = a' -> ~(disjoint a a).
@@ -191,7 +206,6 @@ Lemma disjoint_not_refl_contra: forall a a', disjoint a a' -> a <> a' .
 Proof.
   intros; unfold not; intros; inversion H; subst; destruct H1; apply sub_address_refl.
 Qed.
-
 
 
 Definition disjointb (a a': address): bool := (negb (sub_addressb a a')) && (negb (sub_addressb a' a)).
@@ -231,6 +245,8 @@ Proof.
   unfold not; intros; apply disjoint_is_disjointb in H; discriminate H.
 Qed.
 
+(* Lists of addresses *)
+
 Definition disjoint_lists (l1 l2:list address) : Prop  := forall (a1 a2: address),
   In a1 l1 -> In a2 l2 -> disjoint a1 a2.
 
@@ -261,13 +277,18 @@ Proof.
       + subst; apply disjoint_is_disjointb in H; assumption.
       +  apply IH; assumption.
 Qed.
-  
+
+
+
+
+
+
 (* Generate an address that would conserve the disjointness of the set if appended :
     As the addresses are already disjoint, it is just necessary to take the longest one 
     and change the last character.
     You just have to notice that if an address (c::list) has length n, you cannot have the same 
     sub-addresses (r::list)(l::list)(i::list) at the same time in the list of addresses.
-     *)
+ *)
 
 Compute (map (@length allowed_chars) [[l;r;i];[];[l]]).
 
@@ -301,24 +322,5 @@ Fixpoint npop (n:nat)(a:address): option address :=
   | S n', c::a' => npop n' a'
   | S n', [] => None
   end.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

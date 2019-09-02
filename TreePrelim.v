@@ -7,6 +7,8 @@ Import Bool.
 Require Import Defs Debruijn Occurrences Suboccurrences Address.
 Local Open Scope eqb_scope.
 
+(** STRUCTURE *)
+
 Inductive Tree: Type :=
   | leaf: Occurrence -> Tree
   | unary: Tree -> Occurrence -> Tree
@@ -21,7 +23,6 @@ Instance tree_eqb: Eqb Tree :=
   | _, _ => false
   end.
 
-
 Definition getOccurrence (T:Tree): Occurrence :=
   match T with
   | leaf o => o
@@ -29,12 +30,18 @@ Definition getOccurrence (T:Tree): Occurrence :=
   | binary _ _ o => o
   end.
 
+
+
+
+
+
 (* This property juste traduces the fact that: 
       -> Addresses are well connected between nodes.
       -> Binary nodes are only bound to Op formulas
       -> Unary nodes are only bound to Quant formulas
       -> Leaf nodes are only bound to Nullary formulas
  *)
+
 Inductive ValidTree:Tree -> Prop :=
   | VLeaf (F:formula)(A:address): In F [⊤;⊥;ø; !] \/ (exists v, F = Var v) -> ValidTree (leaf { F, A })
   | VUnary (o:Occurrence)(T:Tree): ValidTree T
@@ -83,15 +90,8 @@ Proof.
   - right; exists (BVar 1); reflexivity.
 Qed.
 
-(* Number of operators in the tree *)
-Fixpoint TSize(T:Tree): nat :=
-  match T with
-  | leaf _ => 0
-  | unary T' _ => 1 + (TSize T')
-  | binary T1 T2 _ => 1 + Nat.max (TSize T1)(TSize T2)
-  end.
 
-(* The tree of a given formula *)
+(** THE TREE OF A FORMULA *)
 
 Fixpoint formulaTreeRec (F:formula)(A:address): Tree:=
   match F with

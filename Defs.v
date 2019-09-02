@@ -9,9 +9,6 @@ Local Open Scope eqb_scope.
 
 (** Names *)
 
-(** Names are coded as string. They will be used for
-    free variables, as we do not consider precise predicate 
-    or function symbols in this library *)
 
 Definition name := string.
 Bind Scope string_scope with name.

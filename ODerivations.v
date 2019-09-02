@@ -7,9 +7,7 @@ Import Bool.
 
 Local Open Scope form.
 
-(** UP TO THIS POINT, EVERYTHING IS WELL DEFINED **)
-
-(* Return the optional derivation rooted at node of address a *)
+(** SUBDERIV *)
 
 Fixpoint subderiv (d:oderivation)(a:address): option oderivation :=
   let '(ORule ls R s ld) := d in
@@ -47,7 +45,7 @@ Compute subderiv Subderiv_example [l;i].
 Local Open Scope list_scope.
 Local Open Scope eqb_scope.
 
-(* Boolean versions of In *)
+(* list_mem for sequents *)
 
 Fixpoint InOSequent (s : osequent) (l : list osequent) : bool :=
     match l with
@@ -55,13 +53,13 @@ Fixpoint InOSequent (s : osequent) (l : list osequent) : bool :=
        | s' :: m => (s' =? s) || (InOSequent s m)
      end.
 
-Fixpoint InOSequent' (s : Occurrence) (l : ocontext) : bool :=
-    match l with
-       | [] => false
-       | s' :: m => (s' =? s) || (InOSequent' s m)
-     end.
 
-(* Get, Lift and Eqb for the list of backedgeables sequents *)
+
+
+
+
+
+(** FUNCTIONS ON LIST OF BACKEDGEABLE SEQUENTS *)
 
 Fixpoint get (n:nat)(l:list (nat*osequent)): osequent :=
   match l with
@@ -100,6 +98,12 @@ Qed.
 
 Local Open Scope eqb_scope.
 
+
+
+
+
+(** COUNT_OCC' *)
+
 Fixpoint count_occ' (l : list Occurrence) (x : formula) : nat := 
   match l with
   | [] => 0
@@ -134,7 +138,15 @@ Proof.
       ++ apply IHl; assumption.
 Qed.
 
-(* Boolean version of valid inference structure for one step *)
+
+
+
+
+
+
+
+
+(** BOOLEAN VERSION OF DERIVATION VALIDITY *)
 
 Definition ovalid_deriv_step '(ORule ls R s ld) :=
   match ls, R, s, List.map oclaim ld, List.map backedges ld with
@@ -211,6 +223,8 @@ Fixpoint ovalid_deriv d :=
 
 Compute ovalid_deriv_step Subderiv_example.
 
+(* Easier Induction principles for derivations *)
+
 Lemma oderivation_ind' (P: oderivation -> Prop) :
   (forall ls r s ds, Forall P ds -> P (ORule ls r s ds)) ->
   forall d, P d.
@@ -223,7 +237,7 @@ Proof.
  apply IH.
  apply IH'.
 Qed.
-  
+
 Local Open Scope string_scope.
 
 Definition oderiv_example :=
@@ -242,21 +256,14 @@ Compute
   
 Compute ovalid_deriv oderiv_example.
 
-(** 
-Claim d s => d's conclusion sequent is s. It means:
 
-                                                                                                 .
-                                                                                                 .
-                                                                                                 .
-                                                                                                d
-                                                                                          -------------
-                                                                                                s
- *)
 
-(* Adds the sequent s in the list of back-edgeable sequents of derivation d *)
-Definition app_oderiv (s:osequent) (d:oderivation) := 
-  let '(ORule ls R s' ds) := d in (ORule ((1, s)::ls) R s' ds).
 
+
+
+
+
+(** INDUCTIVE VALIDITY *)
 
 Local Open Scope nat_scope.
  
@@ -360,7 +367,16 @@ Proof.
   - right; repeat constructor.
 Qed.
 
-(* A few printing functions *)
+
+
+
+
+
+
+
+
+
+(** PRINTING FUNCTIONS *)
 
 Definition context_example : context := [(ν (%0)⊕(%0))%form; (µ (%1)#(%0))%form].
 Compute (print_ctx context_example).
@@ -397,6 +413,8 @@ Compute print_oderiv_list oderiv_example'.
 
 
 
+(** PROVABILITY *)
+
 (* Sequent provable if it is the conclusion of an existing Valid derivation *)
 
 Definition OProvable (s : osequent) :=
@@ -432,6 +450,13 @@ Theorem thm_example_bis:
 Proof.
   repeat constructor. apply (R_Ax _ (// "A") [l] [r]); intuition.
 Qed.
+
+
+
+
+
+
+(** TACTICS *)
 
 Ltac break_step :=
  match goal with

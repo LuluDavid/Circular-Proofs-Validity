@@ -8,10 +8,11 @@ Require Import Arith.
 Import Bool.
 Require Import Defs Debruijn Suboccurrences.
 Local Open Scope eqb_scope.
+
 (** SUBFORMULAS **)
 
 (* In [subform F G], the second argument G is a subformula of the first argument F.
-This way, [subform F] is the set of the subformulas of F *)
+    This way, [subform F] is the set of the subformulas of F *)
 
 Inductive Subform: formula -> formula -> Prop :=
 | SRefl (F:formula): Subform F F
@@ -20,7 +21,10 @@ Inductive Subform: formula -> formula -> Prop :=
 | SFQuant (F G:formula)(q:quant): Subform F G -> Subform (Quant q F) G
 .
 
+Hint Constructors Subform.
 Notation "F ⧼ G" := (Subform G F) (at level 100).
+
+(* Boolean version *)
 
 Fixpoint subform_b (F G : formula) := 
 (F =? G) ||
@@ -191,9 +195,80 @@ Proof.
   right ; intro ; apply subform_b_is_subform in H0 ; rewrite H in H0 ; apply diff_false_true in H0 ; contradiction.
 Qed.
 
-Theorem subform_antisymmetric: Antisymmetric formula _ Subform.
+Lemma subform_op_l: forall F1 F2 o, ~ (Op o F1 F2 ⧼ F1).
 Proof.
 Admitted.
+
+Lemma subform_op_r: forall F1 F2 o, ~ (Op o F1 F2 ⧼ F2).
+Proof.
+Admitted.
+
+Lemma subform_quant: forall F q, ~ (Quant q F ⧼ F).
+Proof.
+Admitted.
+
+Theorem subform_antisymmetric: Antisymmetric formula _ Subform.
+Proof.
+  assert (Hloc: forall x x' o, (x ⧼ Op o x x') /\ (x' ⧼ Op o x x')). { eauto. }
+  assert (HlocBis: forall x q, (x ⧼ Quant q x)). { auto. }
+  red. induction x; destruct y; intros; trivial; try (inversion H; reflexivity); try (inversion H0; reflexivity).
+  - rewrite subform_b_is_subform in *; simpl in *.
+    repeat rewrite orb_true_iff in *; destruct H; try (apply eqb_eq; assumption); 
+    destruct H0; try (symmetry; apply eqb_eq; assumption).
+       destruct (Hloc y1 y2 o0); destruct (Hloc x1 x2 o).
+    destruct H; destruct H0; rewrite <- subform_b_is_subform in *.
+    + assert (Hloc': (y1 ⧼ x1) /\ (x1 ⧼ y1)). 
+      { split; eapply subform_trans; eassumption. }
+      destruct Hloc'; apply IHx1 in H5; trivial. clear H6. subst.
+      destruct (subform_op_l y1 y2 o0); trivial.
+    + assert (Hloc': (y2 ⧼ x1) /\ (x1 ⧼ y2)). 
+      { split; eapply subform_trans; eassumption. }
+      destruct Hloc'; apply IHx1 in H5; trivial. clear H6. subst.
+      destruct (subform_op_r y1 y2 o0); trivial.
+    + assert (Hloc': (y1 ⧼ x2) /\ (x2 ⧼ y1)). 
+      { split; eapply subform_trans; eassumption. }
+      destruct Hloc'; apply IHx2 in H5; trivial. clear H6. subst.
+      destruct (subform_op_l y1 y2 o0); trivial.
+    + assert (Hloc': (y2 ⧼ x2) /\ (x2 ⧼ y2)). 
+      { split; eapply subform_trans; eassumption. }
+      destruct Hloc'; apply IHx2 in H5; trivial. clear H6. subst.
+      destruct (subform_op_r y1 y2 o0); trivial.
+  - rewrite subform_b_is_subform in *; simpl in *.
+    destruct (Hloc x1 x2 o). 
+    rewrite orb_true_iff in H; destruct H; rewrite <- subform_b_is_subform in *.
+    + assert (Hloc': (y ⧼ x1) /\ (x1 ⧼ y)). 
+      { split; eapply subform_trans; try eassumption; apply HlocBis. }
+      destruct Hloc'.
+      apply IHx1 in H3; trivial; subst; destruct (subform_op_l y x2 o); trivial.
+    + assert (Hloc': (y ⧼ x2) /\ (x2 ⧼ y)). 
+      { split; eapply subform_trans; try eassumption; apply HlocBis. }
+      destruct Hloc'.
+      apply IHx2 in H3; trivial; subst; destruct (subform_op_r x1 y o); trivial.
+  - rewrite subform_b_is_subform in *; simpl in *.
+    destruct (Hloc y1 y2 o). 
+    rewrite orb_true_iff in H0; destruct H0; rewrite <- subform_b_is_subform in *.
+    + assert (Hloc': (x ⧼ y1) /\ (y1 ⧼ x)). 
+      { split; eapply subform_trans; try eassumption; apply HlocBis. }
+      destruct Hloc'.
+      apply IHx in H3; trivial; subst; destruct (subform_op_l y1 y2 o); trivial.
+    + assert (Hloc': (x ⧼ y2) /\ (y2 ⧼ x)). 
+      { split; eapply subform_trans; try eassumption; apply HlocBis. }
+      destruct Hloc'.
+      apply IHx in H3; trivial; subst; destruct (subform_op_r y1 y2 o); trivial.
+ - rewrite subform_b_is_subform in *; simpl in *. rewrite orb_true_iff in *.
+   destruct H; destruct H0.
+   + rewrite eqb_eq in H; trivial.
+   + rewrite eqb_eq in H; trivial.
+   + rewrite eqb_eq in H0; symmetry; trivial.
+   + rewrite <- subform_b_is_subform in *.
+      assert (Hloc': (y ⧼ x) /\ (x ⧼ y)). 
+      { split; eapply subform_trans; try eassumption; apply HlocBis. }
+      destruct Hloc'; apply IHx in H1; trivial; subst.
+      destruct (subform_quant y q); trivial.
+Qed.
+
+
+
 
 
 (** LINK WITH SUBOCCURRENCES *)

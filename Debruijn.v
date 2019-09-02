@@ -82,16 +82,10 @@ Definition NuFormula (f:formula) : Prop :=
   | _ => False
   end.
 
-Definition BVarFormula (f:formula) : Prop :=
-  match f with
-  | (% _) => True
-  | _ => False
-  end.
-
 Definition Naturals:formula := (µ (!⊕(%0))).
 
 
-(* Dual *)
+(** Dual *)
 
 Fixpoint dual (F : formula) : formula := match F with
 | Var X => Var X
@@ -233,7 +227,7 @@ Inductive atomic : formula -> Prop :=
 
 
 
-(** VARIABLES *)
+(** VARIABLE INSTANCES *)
 
 Instance V_level : Level V :=
  fix V_level v :=
@@ -265,11 +259,15 @@ Fixpoint print_formula (f:formula) :=
 Compute print_formula (Naturals).
 Compute print_formula (NaturalsDual).
 
-(** Utilities about formula *)
+
+
+
+
+
+(** FORMULA INSTANCES *)
 
 (* A formula level is the maximum number of missings binders for a binded variable.
-    It means that for a formula F, you need at least level F binders to close the formula.
-*)
+    It means that for a formula F, you need at least level F binders to close the formula. *)
   
 Instance form_level : Level formula :=
   fix form_level (f:formula) :=
@@ -281,6 +279,8 @@ Instance form_level : Level formula :=
   end.
 
 Compute form_level (µ((% 0)&(!#(% 0))))%form.
+
+(* Lemmas on Level *)
 
 Lemma BClosed_quant: forall F q, BClosed (Quant q F) -> form_level F <= 1.
 Proof.
@@ -318,7 +318,6 @@ Qed.
 (** Important note : [bsubst] below is only intended to be
     used with a replacement formula [f] which is closed *)
 
-(* bsubst n F f <=> f[%n := F] <=> the free var with debruijn index n replaced by F in f*)
 Instance form_bsubst : BSubst formula :=
  fix form_bsubst n F f :=
  match f with
@@ -327,12 +326,11 @@ Instance form_bsubst : BSubst formula :=
   | Op o f1 f2 => Op o (form_bsubst n F f1) (form_bsubst n F f2)
   | Quant q f' => Quant q (form_bsubst (S n) F f')
  end.
- 
+
 Definition example1: formula := µ (%1 # (ν %1 & %0)).
 Definition example2:formula := example1[[ %0 := //"A" ]].
 Compute example1.
 Compute example2.
-
 
 Instance form_eqb : Eqb formula :=
  fix form_eqb f1 f2 :=
@@ -347,11 +345,15 @@ Instance form_eqb : Eqb formula :=
     (q1 =? q2) &&& form_eqb f1' f2'
   | _,_ => false
   end.
-  
+
 (* Difference between bounded and free variables *)
+
 Compute    (µ((% 0)&(!#(% 0))))%form 
                                    =?
                    (µ((// "V")&(!#(// "V"))))%form.
+
+
+(* Lemmas on level and bsubst *)
 
 Lemma level_bsubst n (f g:formula) :
  level f <= S n -> level g <= n ->
@@ -441,8 +443,10 @@ Proof.
   - rewrite IHF; intuition.
 Qed.
 
-(** Contexts *)
 
+
+
+(** CONTEXTS *)
 
 Definition context := list formula.
 
@@ -452,7 +456,10 @@ Definition print_ctx Γ :=
 (** bsubst, level, eqb : given by instances
     on lists. *)
 
-(** Sequent *)
+
+
+
+(** SEQUENTS *)
 
 Inductive sequent :=
 | Seq : context -> sequent.
@@ -504,7 +511,9 @@ Qed.
 
 
 
-(** Trying to characterize the number of binders in a formula *)
+
+
+(* Trying to characterize the number of binders in a formula *)
 
 Fixpoint FixBinders (f:formula) :=
   match f with
@@ -543,6 +552,10 @@ Proof.
 - inversion H; subst; apply IHf1 in H3; apply IHf2 in H5; simpl; subst; symmetry; assumption.
 - inversion H; subst; apply IHf in H1; simpl; subst; trivial.
 Qed.
+
+
+
+
 
 (* Subst Prop *)
 Theorem bsubst_prop: forall P (f g:formula), 

@@ -18,6 +18,9 @@ Proof.
   unfold InSeq, InSeqb; destruct l; symmetry; apply list_mem_in.
 Qed.
 
+
+
+
 Inductive preFTrace : FTraceType -> oderivation -> Prop :=
  | Leaf f s s' ls R: s = (oseq_forget s') -> InSeq f s -> preFTrace [(f,s)] (ORule ls R s' []) 
  | ConsOne d t R ls s0 s s' f1 f2: 
@@ -34,6 +37,9 @@ Inductive preFTrace : FTraceType -> oderivation -> Prop :=
                           -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d';d])
                         .
 
+
+(** RELATIVELY TO SOME NODE *)
+
 Definition preFTraceNode (t:FTraceType)(d:oderivation)(a:address) :=
   match subderiv d a with
   | None       => False
@@ -41,6 +47,11 @@ Definition preFTraceNode (t:FTraceType)(d:oderivation)(a:address) :=
   end.
 
 Definition FTrace (t:FTraceType)(d:oderivation)(a:address) : Prop := (OValid d) /\ (preFTraceNode t d a). 
+
+
+
+
+
 
 Definition deriv_example :=
 ORule [] Nu (⊢ [{ ν ((%0)⊕(%0)), [] }]) 
@@ -78,6 +89,10 @@ Proof.
 Qed.
 
 Local Open Scope eqb_scope.
+
+
+
+(** BOOLEAN VERSION *)
 
 Fixpoint preFTraceb (t:FTraceType)(d:oderivation) : bool :=
   let '(ORule ls R s ld) := d in
@@ -145,6 +160,16 @@ Proof.
     -- discriminate H0.
 Qed.
 
+
+
+
+
+
+
+
+
+
+
 (** AN INFINITE TRACE IS A STREAM OF FINITE TRACES *)
 
 CoInductive TraceType: Type :=
@@ -152,10 +177,6 @@ CoInductive TraceType: Type :=
   .
 
 Notation "t ;; T" := (TCons t T) (at level 60, right associativity).
-
-
-
-
 
 
 
@@ -328,11 +349,11 @@ End TraceType.
 
 
 
-(** A TRACE OF [d] IS A STREAM OF FINITE TRACES OF [d] *)
 
 Local Open Scope eqb_scope.
 
-(* Accéder à la règle d'axiome qui clot la trace, si celle-ci est valide *)
+(* Access to the last rule used in [d] following [a] *)
+
 Definition last_trace_rule (d:oderivation)(a:address) : option orule_kind :=
   match subderiv d a with
   | None => None
@@ -344,7 +365,9 @@ Definition last_trace_rule (d:oderivation)(a:address) : option orule_kind :=
 
 Compute last_trace_rule deriv_example [i;i].
 
-(* A Trace as a stream of elementary traces requires two   *)
+
+
+(** TRACE VALIDITY *)
 
 CoInductive Trace: TraceType -> oderivation -> Prop := 
   | TraceCons t1 t2 n T d a1 a2: 
@@ -354,53 +377,47 @@ CoInductive Trace: TraceType -> oderivation -> Prop :=
                                               -> npop n a1 = Some a2
                                               -> Trace (t1 ;; t2 ;; T) d.
 
-(* f appears an infinite amount of time in trace t: the problem is that a same formula can appear
-    an infinite amount of time in different occurrences. By the way, if it appears an infinite amount of time
-    in different occurrences, it has to appear infinitely in at least one occurrence. Thus, because we just 
-    care about the formulas appearing an infinite amount of time, checking for the formulas is enough ? *)
+
+(** INFINITE APPEARANCES *)
 
 Definition preInf (f:formula)(t:TraceType): Prop := 
   forall n, exists m, (n <= m) 
                                       /\ 
                         In f (List.map fst (Str_nth m t)).
 
-(* Same + t is a trace for oderivation d *)
 Definition Inf (f:formula)(t:TraceType)(d:oderivation): Prop := Trace t d /\ preInf f t.
 
+(** MINIMUM FOR A GIVEN PATH [t]*)
+
 Definition InfMin (f:formula)(t:TraceType)(d:oderivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> f ≪ G).
+
+(* Existence and Unicity *)
+
+Lemma ExistsMin : forall t d, 
+  exists f, InfMin f t d.
+Proof.
+Admitted.
 
 Lemma UniqueMin : forall f1 f2 t d, 
   InfMin f1 t d -> InfMin f2 t d -> f1 = f2.
 Proof.
 Admitted.
 
+
+(** VALIDITY CRITERIA FOR A PATH *)
+
 Definition ValidTrace (t:TraceType)(d:oderivation) : Prop :=
   Trace t d /\ exists f, (InfMin f t d /\ NuFormula f).
+
+(** FOR A DERIVATION *)
 
 Definition ValidityCriteria (d:oderivation): Prop :=
   forall (t:TraceType), Trace t d -> exists f, (InfMin f t d /\ NuFormula f).
 
+(** DECIDABILITY *)
+
 Definition DecidableValidity : Prop :=
   forall (d:oderivation), (ValidityCriteria d) \/ ~ (ValidityCriteria d).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

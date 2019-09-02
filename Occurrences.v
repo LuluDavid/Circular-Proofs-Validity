@@ -8,8 +8,8 @@ Local Open Scope string_scope.
 Local Open Scope eqb_scope.
 
 
-(** DEFINING OCCURRENCES **)
-  
+(** OCCURRENCES **)
+
 
 Inductive Occurrence :=
   | Occ (F:formula)(a:address).
@@ -30,9 +30,6 @@ Definition print_occurrence (o:Occurrence) :=
   let '(Occ F a) := o in ("{ " ++ print_formula F ++ ", " ++ print_address a ++ " }").
 
 Local Open Scope eqb_scope.
-
-(* Redefining eqb, level, bsubst. 
-    bsubst is not anymore instance because we substitute occurrences in occurrences here *)
 
 Instance occ_eqb : Eqb Occurrence :=
  fix occ_eqb o o' :=
@@ -57,6 +54,8 @@ Qed.
 
 
 
+
+
 (** DEFINING THE DUAL OF AN OCCURRENCE **)
 
 Fixpoint occ_dual (o:Occurrence): Occurrence :=
@@ -68,11 +67,21 @@ Proof.
   intros; destruct o; simpl; rewrite dual_inv, addr_dual_inj; trivial.
 Qed.
 
+
+
+(** ACCESSORS *)
+
 Definition occ_forget (o:Occurrence): formula :=
   let '{ F, A} := o in F.
   
 Definition occ_addr (o:Occurrence): address :=
   let '{ F, A} := o in A.
+
+
+
+
+
+(** EQUIVALENCE *)
 
 Definition equiv (F G:Occurrence) : Prop := 
   occ_forget F = occ_forget G.
@@ -124,7 +133,11 @@ Qed.
 
 
 
-(** ADAPTATION OF DERIVATIONS FOR OCCURRENCES **)
+
+
+
+
+(** OCONTEXTS *)
 
 Definition ocontext := list Occurrence.
   
@@ -138,7 +151,8 @@ Qed.
 
 
 
-(** Sequent *)
+
+(** OSEQUENTS *)
 
 Fixpoint ocontext_forget Γ : list formula := map occ_forget Γ.
 
@@ -152,9 +166,6 @@ Notation "⊢ Γ" := (SeqO Γ) (at level 100).
 Fixpoint oseq_forget (s:osequent): sequent := let '(⊢ Γ) := s in (⊦ (ocontext_forget Γ)).
 
 Fixpoint oseq_addr (s:osequent): list address := let '(⊢ Γ) := s in ocontext_addr Γ.
-
-
-
 
 Local Open Scope string_scope.
 
@@ -183,7 +194,7 @@ Qed.
 
 
 
-(* A prop asserting that 2 sequents have the same formulas in the same order *)
+(** 2 SEQUENTS HAVE SAME FORMULAS IN DIFFERENT ORDERS *)
 
 Definition oseq_equiv (s1 s2: osequent) : Prop := (oseq_forget s1) = (oseq_forget s2).
   
@@ -219,7 +230,12 @@ Qed.
 
 Compute level ctx_example.
 
-(** Derivation: circular approach **)
+
+
+
+
+
+(** RULES *)
 
 Inductive orule_kind :=
   | Ax
@@ -269,6 +285,10 @@ Proof.
   fix IH 1. destruct x; destruct y; try cons; cbn.
   case eqbspec; [ intros <- | cons ]. intuition.
 Qed.
+
+
+
+(** DERIVATIONS *)
 
 Inductive oderivation :=
   | ORule : list (nat*osequent) -> orule_kind -> osequent -> list oderivation -> oderivation.

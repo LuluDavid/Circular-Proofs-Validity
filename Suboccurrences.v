@@ -18,6 +18,10 @@ Inductive PreSuboccurrence: Occurrence -> Occurrence -> Prop :=
 
 Notation "F ⇀ G" := (PreSuboccurrence F G) (at level 100).
 
+
+
+
+
 (** SUBOCCURRENCE *)
 
 Inductive Suboccurrence: Occurrence -> Occurrence -> Prop :=
@@ -29,6 +33,8 @@ Inductive Suboccurrence: Occurrence -> Occurrence -> Prop :=
   .
 Hint Constructors Suboccurrence.
 
+(* Boolean version *)
+ 
 Fixpoint suboccurrence_b_rec ( F:formula )(a:address)(G:Occurrence){ struct F } := 
   ({F,a} =? G) ||
   match F, G with 
@@ -36,8 +42,7 @@ Fixpoint suboccurrence_b_rec ( F:formula )(a:address)(G:Occurrence){ struct F } 
   | (Quant q F'), G => (suboccurrence_b_rec F' (i::a) G)
   | _, _ => false
   end.
-  
-  
+
 Definition suboccurrence_b (F G:Occurrence) : bool := 
   let '{ F', a} := F in (suboccurrence_b_rec F' a G).  
 
@@ -102,27 +107,4 @@ Lemma example_suboccurrence: Suboccurrence f2 f1.
 Proof.
   unfold f1; unfold f2. repeat econstructor. 
 Qed.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
