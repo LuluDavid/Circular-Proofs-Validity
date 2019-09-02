@@ -3,6 +3,7 @@ Require DecimalString.
 Import ListNotations.
 Require Import Arith.
 Import Bool.
+Local Open Scope form.
 Local Open Scope string_scope.
 Local Open Scope eqb_scope.
 
@@ -162,7 +163,7 @@ Definition print_oseq '(⊢ Γ) :=
 
 Instance oseq_level : Level osequent :=
  fun '(⊢ Γ ) => level Γ.
- 
+
 Instance bsubst_seq : BSubst osequent :=
  fun n u '(⊢ Γ ) => (⊢ (Γ[[ %n := u ]]) ).
 

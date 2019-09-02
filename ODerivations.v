@@ -5,6 +5,8 @@ Import ListNotations.
 Require Import Arith.
 Import Bool.
 
+Local Open Scope form.
+
 (** UP TO THIS POINT, EVERYTHING IS WELL DEFINED **)
 
 (* Return the optional derivation rooted at node of address a *)

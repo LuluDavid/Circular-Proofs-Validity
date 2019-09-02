@@ -3,6 +3,7 @@ Import ListNotations.
 
 Require Import Utils Defs Debruijn ODerivations Address Occurrences Subformulas FLSubformulas.
 Local Open Scope eqb_scope.
+Local Open Scope form.
 
 (** PRELIMINARY APPROACH: FINITE TRACES FROM THE ROOT TO A LEAF  *)
 
@@ -16,7 +17,7 @@ Lemma InSeq_is_InSeqb: forall s l, InSeq s l <-> InSeqb s l = true.
 Proof.
   unfold InSeq, InSeqb; destruct l; symmetry; apply list_mem_in.
 Qed.
-  
+
 Inductive preFTrace : FTraceType -> oderivation -> Prop :=
  | Leaf f s s' ls R: s = (oseq_forget s') -> InSeq f s -> preFTrace [(f,s)] (ORule ls R s' []) 
  | ConsOne d t R ls s0 s s' f1 f2: 
@@ -366,17 +367,12 @@ Definition preInf (f:formula)(t:TraceType): Prop :=
 (* Same + t is a trace for oderivation d *)
 Definition Inf (f:formula)(t:TraceType)(d:oderivation): Prop := Trace t d /\ preInf f t.
 
-Definition InfMin (f:formula)(t:TraceType)(d:oderivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> f ⧼ G).
-
+Definition InfMin (f:formula)(t:TraceType)(d:oderivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> f ≪ G).
 
 Lemma UniqueMin : forall f1 f2 t d, 
   InfMin f1 t d -> InfMin f2 t d -> f1 = f2.
 Proof.
-  intros. destruct H; destruct H0.
-  apply subform_antisymmetric.
-  - apply H2; assumption.
-  - apply H1; assumption.
-Qed.
+Admitted.
 
 Definition ValidTrace (t:TraceType)(d:oderivation) : Prop :=
   Trace t d /\ exists f, (InfMin f t d /\ NuFormula f).

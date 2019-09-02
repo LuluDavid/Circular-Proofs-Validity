@@ -82,6 +82,12 @@ Definition NuFormula (f:formula) : Prop :=
   | _ => False
   end.
 
+Definition BVarFormula (f:formula) : Prop :=
+  match f with
+  | (% _) => True
+  | _ => False
+  end.
+
 Definition Naturals:formula := (µ (!⊕(%0))).
 
 
@@ -185,7 +191,7 @@ Definition BClosed {A}`{Level A} (a:A) := level a = 0.
 
 Hint Unfold BClosed.
 
-Notation "f [[ % n := F ]]" := (bsubst n F f) (at level 150, right associativity).
+Notation "f [[ % n := F ]]" := (bsubst n F f) (at level 150, right associativity) : formula_scope.
 
 
 
@@ -421,6 +427,20 @@ Proof.
    rewrite H; trivial.
 Qed.
 
+Lemma switch_BSubst : forall (F G H:formula) a b, 
+  BClosed G -> BClosed H -> a <> b -> ((F[[ %a := G ]]) [[ %b := H ]]) = ((F[[ %b := H ]]) [[ %a := G ]]).
+Proof.
+  induction F; try destruct v; unfold bsubst; simpl; intros; trivial.
+  - destruct (n =? a) eqn:Heqa; destruct (n =? b) eqn:Heqb; 
+    try rewrite eqb_eq in Heqa; try rewrite eqb_eq in Heqb.
+    + subst; destruct H2; trivial.
+    + subst; simpl; rewrite eqb_refl; apply BClosed_bsubst; trivial.
+    + subst; simpl; rewrite eqb_refl; symmetry; apply BClosed_bsubst; trivial.
+    + subst; simpl; rewrite Heqa, Heqb; trivial.
+  - rewrite IHF1, IHF2; trivial.
+  - rewrite IHF; intuition.
+Qed.
+
 (** Contexts *)
 
 
@@ -524,16 +544,13 @@ Proof.
 - inversion H; subst; apply IHf in H1; simpl; subst; trivial.
 Qed.
 
-
-
-
-
-
-
-
-
-
-
+(* Subst Prop *)
+Theorem bsubst_prop: forall P (f g:formula), 
+  (forall k, P (f[[%k := g]]) ) -> P f.
+Proof.
+  intros. assert (f [[ % level f := g]] = f). { rewrite le_level_BSubst_unchanged; trivial. }
+  rewrite <- H. apply X.
+Qed. 
 
 
 

@@ -21,43 +21,6 @@ Bind Scope string_scope with name.
 Definition variable := name.
 Bind Scope string_scope with name.
 
-(** Sets of names *)
-
-Module Names.
- Include MSetRBT.Make (StringOT).
-
- Definition of_list : list name -> t :=
-   fold_right add empty.
-
- Fixpoint unions (l: list t) :=
-   match l with
-   | [] => empty
-   | vs::l => union vs (unions l)
-   end.
-
- Definition unionmap {A} (f: A -> t) :=
-   fix unionmap (l:list A) :=
-     match l with
-     | [] => empty
-     | a::l => union (f a) (unionmap l)
-     end.
-
- Definition map (f:name->name) (s : t) :=
-   fold (fun v => add (f v)) s empty.
-
- Definition flatmap (f:name->t) (s : t) :=
-   fold (fun v => union (f v)) s empty.
-
-End Names.
-
-(* Prevent incomplete reductions *)
-Arguments Names.singleton !_.
-Arguments Names.add !_ !_.
-Arguments Names.remove !_ !_.
-Arguments Names.union !_ !_.
-Arguments Names.inter !_ !_.
-Arguments Names.diff !_ !_.
-
 (** Misc types : operators, quantificators *)
 
 Inductive op := Or_add | Or_mult | And_add | And_mult.
