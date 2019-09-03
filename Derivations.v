@@ -9,7 +9,7 @@ Local Open Scope form.
 
 (** SUBDERIV *)
 
-Fixpoint subderiv (d:oderivation)(a:address): option oderivation :=
+Fixpoint subderiv (d:derivation)(a:address): option derivation :=
   let '(ORule ls R s ld) := d in
   match a, ld with
   | [], _               => Some d
@@ -19,10 +19,10 @@ Fixpoint subderiv (d:oderivation)(a:address): option oderivation :=
   | _, _ => None
   end.
 
-Definition is_subderiv (d1 d2: oderivation): Prop := exists a, subderiv d2 a = Some d1. 
+Definition is_subderiv (d1 d2: derivation): Prop := exists a, subderiv d2 a = Some d1. 
 Local Open Scope string_scope.
 
-Definition Subderiv_example: oderivation := 
+Definition Subderiv_example: derivation := 
   ORule [] And_mult (⊢[{ (//"A"#~//"A")⊗!, [] }]) 
               [
               ORule [] Or_mult (⊢[{ //"A"#~//"A", [l] }]) [
@@ -148,8 +148,8 @@ Qed.
 
 (** BOOLEAN VERSION OF DERIVATION VALIDITY *)
 
-Definition ovalid_deriv_step '(ORule ls R s ld) :=
-  match ls, R, s, List.map oclaim ld, List.map backedges ld with
+Definition valid_deriv_step '(ORule ls R s ld) :=
+  match ls, R, s, List.map claim ld, List.map backedges ld with
   | ls1, Ax, (⊢ {A,_}::Γ ), [], _               => list_mem (dual A) (map occ_forget Γ)
   | _, TopR,  (⊢ Γ ), [], _           => list_mem ⊤ (map occ_forget Γ)
   | _, OneR,  (⊢ [{! ,_}]), [], _               => true
@@ -216,16 +216,16 @@ Definition ovalid_deriv_step '(ORule ls R s ld) :=
   | _,_,_,_,_ => false
   end.
 
-Fixpoint ovalid_deriv d :=
-  ovalid_deriv_step d &&&
+Fixpoint valid_deriv d :=
+  valid_deriv_step d &&&
    (let '(ORule _ _ _ ld) := d in
-    List.forallb (ovalid_deriv) ld).
+    List.forallb (valid_deriv) ld).
 
-Compute ovalid_deriv_step Subderiv_example.
+Compute valid_deriv_step Subderiv_example.
 
 (* Easier Induction principles for derivations *)
 
-Lemma oderivation_ind' (P: oderivation -> Prop) :
+Lemma derivation_ind' (P: derivation -> Prop) :
   (forall ls r s ds, Forall P ds -> P (ORule ls r s ds)) ->
   forall d, P d.
 Proof.
@@ -254,7 +254,7 @@ Compute
                       [] ⊢{ (//A#¬//A), [] }
   *)
   
-Compute ovalid_deriv oderiv_example.
+Compute valid_deriv oderiv_example.
 
 
 
@@ -267,74 +267,74 @@ Compute ovalid_deriv oderiv_example.
 
 Local Open Scope nat_scope.
  
-Inductive OValid : oderivation -> Prop :=
+Inductive Valid : derivation -> Prop :=
   
  | V_Ax Γ A ls a a': In { dual A, a' } Γ
-                                -> OValid (ORule ls Ax (⊢ {A, a}::Γ) [])
+                                -> Valid (ORule ls Ax (⊢ {A, a}::Γ) [])
  | V_Tr Γ ls a: In {⊤, a} Γ 
-                       -> OValid (ORule ls TopR (⊢ Γ) [])
- | V_One ls a: OValid (ORule ls OneR (⊢ [{!%form, a}]) [])
- | V_Bot d Γ ls a: OValid d 
-                             -> OClaim d (⊢Γ) 
+                       -> Valid (ORule ls TopR (⊢ Γ) [])
+ | V_One ls a: Valid (ORule ls OneR (⊢ [{!%form, a}]) [])
+ | V_Bot d Γ ls a: Valid d 
+                             -> Claim d (⊢Γ) 
                              -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{⊥, a}::Γ) :: lift ls)
-                             -> OValid (ORule ls BotR (⊢{⊥, a}::Γ) [d])
+                             -> Valid (ORule ls BotR (⊢{⊥, a}::Γ) [d])
  | V_Or_add_l d F G Γ a ls: 
-                            OValid d 
-                            -> OClaim d (⊢{F,l::a}::Γ) 
+                            Valid d 
+                            -> Claim d (⊢{F,l::a}::Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{ F⊕G, a }::Γ) :: lift ls)
-                            -> OValid (ORule ls Or_add_l (⊢{ F⊕G, a }::Γ) [d])
+                            -> Valid (ORule ls Or_add_l (⊢{ F⊕G, a }::Γ) [d])
  | V_Or_add_r d F G Γ a ls  : 
-                            OValid d 
-                            -> OClaim d (⊢{G,r::a}::Γ)
+                            Valid d 
+                            -> Claim d (⊢{G,r::a}::Γ)
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{ F⊕G, a }::Γ) :: lift ls)
-                            -> OValid (ORule ls Or_add_r (⊢{ F⊕G, a }::Γ) [d])
+                            -> Valid (ORule ls Or_add_r (⊢{ F⊕G, a }::Γ) [d])
  | V_Or_mult d F G Γ a ls :
-                            OValid d 
-                            -> OClaim d (⊢{ F, l::a } :: { G, r::a } :: Γ) 
+                            Valid d 
+                            -> Claim d (⊢{ F, l::a } :: { G, r::a } :: Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{ F#G, a }::Γ) :: lift ls)
-                            -> OValid (ORule ls Or_mult (⊢ { F#G, a}::Γ) [d])
+                            -> Valid (ORule ls Or_mult (⊢ { F#G, a}::Γ) [d])
  | V_And_add d1 d2 F G Γ a ls :
-                            OValid d1 -> OValid d2 
-                            -> OClaim d1 (⊢ { F, l::a }::Γ) -> OClaim d2 (⊢ { G, r::a }::Γ) 
+                            Valid d1 -> Valid d2 
+                            -> Claim d1 (⊢ { F, l::a }::Γ) -> Claim d2 (⊢ { G, r::a }::Γ) 
                             -> Backedges d1 (lift ls) \/ Backedges d1 ( (1, ⊢{ F&G, a }::Γ) :: lift ls)
                             -> Backedges d2 (lift ls) \/ Backedges d2 ( (1, ⊢{ F&G, a }::Γ) :: lift ls)
-                            -> OValid (ORule ls And_add (⊢ { F&G, a } :: Γ) [d1;d2])
+                            -> Valid (ORule ls And_add (⊢ { F&G, a } :: Γ) [d1;d2])
  | V_And_mult d1 d2 F G Γ1 Γ2 a ls :
-                            OValid d1 -> OValid d2 
-                            -> OClaim d1 (⊢ { F, l::a } :: Γ1) -> OClaim d2 (⊢ { G, r::a } :: Γ2) 
+                            Valid d1 -> Valid d2 
+                            -> Claim d1 (⊢ { F, l::a } :: Γ1) -> Claim d2 (⊢ { G, r::a } :: Γ2) 
                             -> Backedges d1 (lift ls) \/ Backedges d1 ( (1, ⊢ { F⊗G, a } :: (app Γ1 Γ2)) :: lift ls)
                             -> Backedges d2 (lift ls) \/ Backedges d2 ( (1, ⊢ { F⊗G, a } :: (app Γ1 Γ2)) :: lift ls)
-                            -> OValid (ORule ls And_mult (⊢ { F⊗G, a } :: (app Γ1 Γ2)) [d1;d2])
+                            -> Valid (ORule ls And_mult (⊢ { F⊗G, a } :: (app Γ1 Γ2)) [d1;d2])
  | V_Cut d1 d2 A Γ1 Γ2 ls a1 a2 :
-                            OValid d1 -> OValid d2 
-                            -> OClaim d1 (⊢ { A, a1}::Γ1) -> OClaim d2 (⊢ { dual A, a2 }::Γ2) 
+                            Valid d1 -> Valid d2 
+                            -> Claim d1 (⊢ { A, a1}::Γ1) -> Claim d2 (⊢ { dual A, a2 }::Γ2) 
                             -> disjoint_addr_list a1 (ocontext_addr Γ1) -> disjoint_addr_list a2 (ocontext_addr Γ2)
                             -> Backedges d1 (lift ls) \/ Backedges d1 ( (1, ⊢app Γ1 Γ2) :: lift ls) 
                             -> Backedges d2 (lift ls) \/ Backedges d2 ( (1, ⊢app Γ1 Γ2) :: lift ls)
-                            -> OValid (ORule ls Cut (⊢app Γ1 Γ2) [d1;d2])
+                            -> Valid (ORule ls Cut (⊢app Γ1 Γ2) [d1;d2])
  | V_Ex d F G Γ1 Γ2 ls :
-                            OValid d 
-                            -> OClaim d (⊢ app Γ1 (G::F::Γ2)) 
+                            Valid d 
+                            -> Claim d (⊢ app Γ1 (G::F::Γ2)) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢app Γ1 (F::G::Γ2)) :: lift ls)
-                            -> OValid (ORule ls Ex (⊢app Γ1 (F::G::Γ2)) [d])
+                            -> Valid (ORule ls Ex (⊢app Γ1 (F::G::Γ2)) [d])
  | V_Mu d F Γ ls a :
-                            OValid d 
-                            -> OClaim d (⊢ { F[[ %0 := µ F ]], i::a }::Γ) 
+                            Valid d 
+                            -> Claim d (⊢ { F[[ %0 := µ F ]], i::a }::Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢ { (µ F), a }::Γ) :: lift ls)
-                            -> OValid (ORule ls Mu (⊢ { (µ F), a }::Γ) [d])
+                            -> Valid (ORule ls Mu (⊢ { (µ F), a }::Γ) [d])
  | V_Nu d F Γ ls a :
-                            OValid d 
-                            -> OClaim d (⊢ {F[[ %0 := ν F ]], i::a}::Γ) 
+                            Valid d 
+                            -> Claim d (⊢ {F[[ %0 := ν F ]], i::a}::Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢ { (ν F), a }::Γ) :: lift ls)
-                            -> OValid (ORule ls Nu (⊢ { (ν F), a }::Γ) [d])
+                            -> Valid (ORule ls Nu (⊢ { (ν F), a }::Γ) [d])
  
  (** FINALLY, THE BACK-EDGE RULE **)
  
  | V_BackEdge ls s n: option_oseq_equiv (Some s) (list_assoc n ls)
-                                                -> OValid (ORule ls (BackEdge n) s [])
+                                                -> Valid (ORule ls (BackEdge n) s [])
  .
 
-Hint Constructors OValid.
+Hint Constructors Valid.
 
 Definition oderiv_example' :=
 ORule [] Nu (⊢ [{ (ν (%0)⊕(%0)), [] }]) 
@@ -356,10 +356,10 @@ ORule [] Nu (⊢ [{ (ν (%0)⊕(%0)), [] }])
     ----------------------------------------------------- (v)
                         [] ⊢{ vX. X⊕X, [] }
     *)
-Compute level oderiv_example'.
+
 
 Theorem thm_oexample: 
-  OValid (oderiv_example').
+  Valid (oderiv_example').
 Proof.
   constructor.
   - repeat constructor.
@@ -367,13 +367,34 @@ Proof.
   - right; repeat constructor.
 Qed.
 
+Definition cut_example (F:formula): derivation :=
+ORule [] Cut (⊢ [{ F#(~F), [r] }]) 
+          [
+          ORule [] Or_mult (⊢ [{ F#(~F), [l] }]) [ ORule [] Ax (⊢ [{ F, [l;l] }; { ~ F, [r;l] }]) [] ];
+          ORule [] Ex (⊢ [{ ~(F#(~F)), [l] };{ F#(~F), [r] }]) [ORule [] Ax (⊢ [{ F#(~F), [r] }; { ~(F#(~F)), [l] }]) [] ]
+          ].
 
+(* 
+    ------------------------------- (Ax)     -------------------------------------------- (Ax)
+    [] ⊢ { F, [l;l] }, {~F, [r;l]             [] ⊢ { F#~F, [r] }, { ~(F#~F), [l] }
+    -------------------------------- (#)      ------------------------------------------ (Ex)
+     [] ⊢ { F#~F, [l] }                       [] ⊢ { ~(F#~F), [l] }, { F#~F, [r] }
+    --------------------------------------------------------------------------- (Cut)
+                        [] ⊢{ F#~F, [r] }
+*)
 
+Theorem thm_cut_example (F:formula): 
+  Valid (cut_example F).
+Proof.
+  apply (V_Cut _ _  (F#(~F)) [] [{ F#(~F), [r] }] _ [l] [l]); repeat constructor; intuition.
+  - eapply V_Ax; intuition.
+  - eapply (V_Ex _ _ _ [] []); repeat constructor.
+    eapply V_Ax; intuition.
+  - inversion H; try contradiction; simpl in H1; subst; inversion H0.
+  - inversion H; try contradiction; simpl in H1; subst; inversion H0.
+Qed.
 
-
-
-
-
+Compute (valid_deriv (cut_example (// "X"))).
 
 
 (** PRINTING FUNCTIONS *)
@@ -392,10 +413,10 @@ Fixpoint print_list_oseq (ls:list (nat*osequent)) :=
 
 Local Open Scope string_scope.
 
-Fixpoint print_oderiv_list (d:oderivation): list string :=
+Fixpoint print_oderiv_list (d:derivation): list string :=
   let '(ORule ls R s ds) := d in
   concat (map print_oderiv_list ds) ++ 
-  [string_mult "-" (String.length (print_list_oseq ls ++ print_oseq s)) ++ print_orule R; 
+  [string_mult "-" (String.length (print_list_oseq ls ++ print_oseq s)) ++ print_rule R; 
   print_list_oseq ls ++ print_oseq s].
 
 Fixpoint print_list_string (l:list string): string :=
@@ -405,7 +426,7 @@ Fixpoint print_list_string (l:list string): string :=
   " ++ (print_list_string ls)
   end.
   
-Definition print_oderiv (d:oderivation) : string := print_list_string (print_oderiv_list d).
+Definition print_oderiv (d:derivation) : string := print_list_string (print_oderiv_list d).
 
 Compute print_oderiv_list oderiv_example'.
 
@@ -418,7 +439,7 @@ Compute print_oderiv_list oderiv_example'.
 (* Sequent provable if it is the conclusion of an existing Valid derivation *)
 
 Definition OProvable (s : osequent) :=
-  exists d, OValid d /\ OClaim d s.
+  exists d, Valid d /\ Claim d s.
 
 (* OPr s => Provability without backedges *)
 
@@ -462,7 +483,7 @@ Ltac break_step :=
  match goal with
  | H : match _ with true => _ | false => _ end = true |- _ =>
    rewrite !lazy_andb_iff in H
- | H : match oclaim ?x with _ => _ end = true |- _ =>
+ | H : match claim ?x with _ => _ end = true |- _ =>
    destruct x; simpl in H; try easy
  | H : match map _ ?x with _ => _ end = true |- _ =>
    destruct x; simpl in H; try easy
@@ -475,7 +496,7 @@ Ltac break :=
  match goal with
  | H : match _ with true => _ | false => _ end = true |- _ =>
    rewrite !lazy_andb_iff in H
- | H : match oclaim ?x with _ => _ end = true |- _ =>
+ | H : match claim ?x with _ => _ end = true |- _ =>
    destruct x; simpl in H; try easy; break
  | H : match map _ ?x with _ => _ end = true |- _ =>
    destruct x; simpl in H; try easy; break
@@ -493,7 +514,7 @@ Ltac mytac :=
  rewrite ?@Utils.eqb_eq in * by auto with typeclass_instances.
 
 Ltac rewr :=
- unfold OClaim, BClosed in *;
+ unfold Claim, BClosed in *;
  match goal with
  | H: _ = _ |- _ => rewrite H in *; clear H; rewr
  | _ => rewrite ?eqb_refl
@@ -501,13 +522,13 @@ Ltac rewr :=
  
 Local Open Scope eqb_scope.
 
-Theorem ovalid_deriv_is_OValid: forall (d:oderivation), 
-  ovalid_deriv d = true <-> OValid d.
+Theorem valid_deriv_is_Valid: forall (d:derivation), 
+  valid_deriv d = true <-> Valid d.
 Proof.
   split.
- - induction d as [ls r s ds IH] using oderivation_ind'.
-   cbn - [ovalid_deriv_step]. rewrite lazy_andb_iff. intros (H,H').
-   assert (IH' : Forall (fun d => OValid d) ds).
+ - induction d as [ls r s ds IH] using derivation_ind'.
+   cbn - [valid_deriv_step]. rewrite lazy_andb_iff. intros (H,H').
+   assert (IH' : Forall (fun d => Valid d) ds).
    { rewrite Forall_forall in *. rewrite forallb_forall in *. auto. }
    clear IH H'.
    cbn in *;
@@ -567,12 +588,12 @@ Proof.
       apply lazy_orb_iff in H0; destruct H0; try (left; apply Utils.eqb_eq; assumption); 
       right; apply Utils.eqb_eq; assumption.
 - induction 1; simpl; trivial;
-  try(repeat rewrite lazy_andb_iff; split; try(rewrite IHOValid; trivial); split; 
+  try(repeat rewrite lazy_andb_iff; split; try(rewrite IHValid; trivial); split; 
       try(apply Utils.eqb_eq; trivial); apply lazy_orb_iff; rewrite Utils.eqb_eq, Utils.eqb_eq; trivial);
   try(rewrite H1; rewrite H2; repeat rewrite Utils.eqb_refl; repeat rewrite lazy_andb_iff;
          repeat rewrite lazy_orb_iff; split; try(split; repeat rewrite Utils.eqb_eq; assumption);
-         rewrite IHOValid1, IHOValid2; trivial);
-  try (rewrite H0; repeat rewrite Utils.eqb_refl; rewrite lazy_andb_iff; split; try(rewrite IHOValid; trivial);
+         rewrite IHValid1, IHValid2; trivial);
+  try (rewrite H0; repeat rewrite Utils.eqb_refl; rewrite lazy_andb_iff; split; try(rewrite IHValid; trivial);
      rewrite lazy_orb_iff; repeat rewrite Utils.eqb_eq; trivial).
   + rewrite lazy_orb_false. destruct Γ; try (inversion H; reflexivity); destruct o eqn:Heq.
      apply list_mem_in_occ; exists a'; trivial.
@@ -580,7 +601,7 @@ Proof.
   + rewrite H1; rewrite H2; repeat rewrite Utils.eqb_refl; 
      repeat rewrite lazy_andb_iff; repeat rewrite lazy_orb_iff; repeat rewrite lazy_andb_iff. 
      repeat split; try (apply disjoint_addr_list_is_disjoint_addr_listb); trivial;
-     repeat rewrite Utils.eqb_eq; trivial; rewrite IHOValid1, IHOValid2; trivial.
+     repeat rewrite Utils.eqb_eq; trivial; rewrite IHValid1, IHValid2; trivial.
   + rewrite H0; repeat rewrite lazy_andb_iff; repeat split.
     ++ apply list_permutb_pattern.
     ++ destruct (length (Γ1 ++ F :: G :: Γ2)) eqn:Heq.
@@ -589,7 +610,7 @@ Proof.
         -- discriminate Heq.
         -- injection Heq as Heq; apply length_zero_iff_nil in Heq; destruct Γ1; discriminate Heq.
     ++ apply lazy_orb_iff; repeat rewrite Utils.eqb_eq; trivial.
-    ++ rewrite IHOValid; trivial.
+    ++ rewrite IHValid; trivial.
   + destruct (list_assoc n ls) eqn:Heq.
     ++ destruct (list_assoc_get_Some n ls o); try assumption; rewrite lazy_orb_false; 
           apply oseq_equiv_is_oseq_equivb; trivial.

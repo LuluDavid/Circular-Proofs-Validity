@@ -216,8 +216,8 @@ Definition getSubstSet (f:formula) := noDupSubst (getSubst f).
 
 
 Local Open Scope string_scope.
-Definition exampleFL1: formula :=  (%1) & (! # (// "X")).
-Definition exampleFL2: formula := µ(ν(%2 & %1)). (* µX. vY. (X & Y) *)
+Definition exampleFL1: formula :=  (%0) & (! # (// "X")).
+Definition exampleFL2: formula := µ(ν(%1 & %0)#ø). (* µX. vY. (X & Y) *)
 Compute FLSet exampleFL1.
 Compute FLSet exampleFL2.
 
@@ -232,14 +232,26 @@ Compute (FLSet F') =? (FLSet G').
 
 
 
-
-
-
 Notation "F ≪ G" := (In F (FL G)) (at level 100).
 
+Fixpoint FLMinRec (l:list formula)(min:formula): option formula :=
+  match l with  
+  | []     => Some min
+  | f::fs => if list_mem f (FL min) then FLMinRec fs min else 
+                                                      if list_mem min (FL f) then FLMinRec fs f else None
+  end.
+
+Definition FLMin (l:list formula) : option formula :=
+  match l with 
+  | []     => None
+  | f::fs => FLMinRec fs f
+  end.
+
+Compute FLMin (FLSet exampleFL1).
+Compute FLMin (FLSet exampleFL2).
 
 
-
+(* Lemmas on FL *)
 
 Lemma FL_refl: forall f, f ≪ f.
 Proof.
@@ -273,7 +285,7 @@ Proof.
       + inversion H1.
 Qed.
 
-Theorem subform_dec : forall F G, (F ≪ G) \/ (~ (F ≪ G)).
+Theorem FLsubform_dec : forall F G, (F ≪ G) \/ (~ (F ≪ G)).
 Proof.
   intros; pose proof (@InDec formula);
   eapply H; apply eqbspec_formula. 
@@ -294,6 +306,7 @@ Proof.
     + rewrite BClosed_MSubst in H0; trivial; left; subst; rewrite BClosed_MSubst; trivial; apply FL_refl.
     + rewrite BClosed_MSubst in *; trivial. admit.
 Admitted.
+Print formula_ind.
 
 
 
@@ -334,9 +347,17 @@ Admitted.
 
 
 
+(* Lemma on FLMin *)
 
+Lemma FLMinRecApp: forall l1 l2 F f1 f2, FLMinRec l1 F = Some f1 -> FLMinRec l2 F = Some f2
+                                                       -> FLMinRec (l1 ++ l2) F = FLMin [f1; f2].
+Proof.
+Admitted.
 
-
+Lemma FLMinExists: forall F, 
+  BClosed F -> exists G, FLMin (FL F) = Some G.
+Proof.
+Admitted.
 
 
 

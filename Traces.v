@@ -1,7 +1,7 @@
 Require Import List.
 Import ListNotations.
 
-Require Import Utils Defs Debruijn ODerivations Address Occurrences Subformulas FLSubformulas.
+Require Import Utils Defs Debruijn Derivations Address Occurrences Subformulas FLSubformulas.
 Local Open Scope eqb_scope.
 Local Open Scope form.
 
@@ -21,7 +21,7 @@ Qed.
 
 
 
-Inductive preFTrace : FTraceType -> oderivation -> Prop :=
+Inductive preFTrace : FTraceType -> derivation -> Prop :=
  | Leaf f s s' ls R: s = (oseq_forget s') -> InSeq f s -> preFTrace [(f,s)] (ORule ls R s' []) 
  | ConsOne d t R ls s0 s s' f1 f2: 
                           preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
@@ -40,31 +40,19 @@ Inductive preFTrace : FTraceType -> oderivation -> Prop :=
 
 (** RELATIVELY TO SOME NODE *)
 
-Definition preFTraceNode (t:FTraceType)(d:oderivation)(a:address) :=
+Definition preFTraceNode (t:FTraceType)(d:derivation)(a:address) :=
   match subderiv d a with
   | None       => False
   | Some d'  => preFTrace t d'
   end.
 
-Definition FTrace (t:FTraceType)(d:oderivation)(a:address) : Prop := (OValid d) /\ (preFTraceNode t d a). 
+Definition FTrace (t:FTraceType)(d:derivation)(a:address) : Prop := (Valid d) /\ (preFTraceNode t d a). 
 
 
 
 
 
-
-Definition deriv_example :=
-ORule [] Nu (⊢ [{ ν ((%0)⊕(%0)), [] }]) 
-          [
-          (
-          ORule [(1, ⊢ [{ (ν (%0)⊕(%0)), [] }])] Or_add_l (⊢ [ { ((ν (%0)⊕(%0)) ⊕ (ν (%0)⊕(%0))), [i] } ] )
-            [
-            (
-            ORule [(2, ⊢ [{ (ν (%0)⊕(%0)), [] }])] (BackEdge 2) (⊢ [ { ν (%0)⊕(%0), [l;i] } ] ) []
-            )
-            ] 
-          ) 
-          ].
+Print oderiv_example'.
 
 (*
     ----------------------------------------------------- (BackEdge (⊢vX. X⊕X))
@@ -82,9 +70,9 @@ Definition FTrace_example: FTraceType :=
    (((ν (%0)⊕(%0)) ⊕ (ν (%0)⊕(%0))), ⊦ [((ν (%0)⊕(%0)) ⊕ (ν (%0)⊕(%0)))] );
    (ν (%0)⊕(%0), ⊦ [ν (%0)⊕(%0)] )].
 
-Lemma FTrace_example_lemma : FTrace FTrace_example deriv_example [].
+Lemma FTrace_example_lemma : FTrace FTrace_example oderiv_example' [].
 Proof.
-  unfold deriv_example; unfold FTrace_example. split;
+  split;
   repeat (constructor; simpl; intuition).
 Qed.
 
@@ -94,7 +82,7 @@ Local Open Scope eqb_scope.
 
 (** BOOLEAN VERSION *)
 
-Fixpoint preFTraceb (t:FTraceType)(d:oderivation) : bool :=
+Fixpoint preFTraceb (t:FTraceType)(d:derivation) : bool :=
   let '(ORule ls R s ld) := d in
   match t, ld with
   | [(f,s')], [] => (oseq_forget s =? s') &&& (InSeqb f s')
@@ -106,14 +94,14 @@ Fixpoint preFTraceb (t:FTraceType)(d:oderivation) : bool :=
   | _, _ => false
   end.
 
-Definition FTraceb (t:FTraceType)(d:oderivation)(a:address) :=
-  (ovalid_deriv d) && 
+Definition FTraceb (t:FTraceType)(d:derivation)(a:address) :=
+  (valid_deriv d) && 
   match subderiv d a with
   | None       => false
   | Some d'  => preFTraceb t d'
   end.
 
-Compute FTraceb FTrace_example deriv_example [].
+Compute FTraceb FTrace_example oderiv_example' [].
 
 Lemma preFTrace_is_preFtraceb : forall t d, preFTrace t d <-> preFTraceb t d = true.
 Proof.
@@ -148,12 +136,12 @@ Qed.
 Theorem FTrace_is_FTraceb : forall a d t, FTrace t d a <-> FTraceb t d a = true.
 Proof.
   unfold FTrace, FTraceb. split; intros.
-  - destruct H; rewrite andb_true_iff; rewrite ovalid_deriv_is_OValid; split; try assumption; 
+  - destruct H; rewrite andb_true_iff; rewrite valid_deriv_is_Valid; split; try assumption; 
     unfold preFTraceNode in H0. 
     destruct (subderiv d a) eqn:Heq.
     -- apply preFTrace_is_preFtraceb; assumption.
     -- destruct H0.
-  - apply andb_true_iff in H; destruct H; rewrite <- ovalid_deriv_is_OValid; split; try assumption;
+  - apply andb_true_iff in H; destruct H; rewrite <- valid_deriv_is_Valid; split; try assumption;
     unfold preFTraceNode.
     destruct (subderiv d a) eqn:Heq.
     -- apply preFTrace_is_preFtraceb; assumption.
@@ -178,8 +166,9 @@ CoInductive TraceType: Type :=
 
 Notation "t ;; T" := (TCons t T) (at level 60, right associativity).
 
-
-
+Ltac coinduction proof :=
+  cofix proof; intros; constructor;
+   [ clear proof | try (apply proof; clear proof) ].
 
 (** Properties on these streams *)
 Section TraceType.
@@ -232,10 +221,6 @@ Qed.
 CoInductive EqSt (s1 s2: TraceType) : Prop :=
     eqst :
         hd s1 = hd s2 -> EqSt (tl s1) (tl s2) -> EqSt s1 s2.
-
-Ltac coinduction proof :=
-  cofix proof; intros; constructor;
-   [ clear proof | try (apply proof; clear proof) ].
 
 Theorem EqSt_reflex : forall s:TraceType, EqSt s s.
 Proof.
@@ -340,12 +325,17 @@ Qed.
 
 End TraceType.
 
+CoFixpoint TraceRepeat (t:FTraceType) := t ;; (TraceRepeat t).
+
+Definition Trace_Example := TraceRepeat FTrace_example.
 
 
-
-
-
-
+Lemma Str_nth_ex : forall n, Str_nth n Trace_Example = FTrace_example.
+Proof.
+  unfold Trace_Example; induction n; simpl.
+  - unfold Str_nth; simpl; trivial.
+  - unfold Str_nth in *; simpl; rewrite IHn; trivial.
+Qed.
 
 
 
@@ -354,7 +344,7 @@ Local Open Scope eqb_scope.
 
 (* Access to the last rule used in [d] following [a] *)
 
-Definition last_trace_rule (d:oderivation)(a:address) : option orule_kind :=
+Definition last_trace_rule (d:derivation)(a:address) : option rule_kind :=
   match subderiv d a with
   | None => None
   | Some d' => let '(ORule ls R s ld) := d' in match ld with 
@@ -363,14 +353,14 @@ Definition last_trace_rule (d:oderivation)(a:address) : option orule_kind :=
                                                                    end
   end.
 
-Compute last_trace_rule deriv_example [i;i].
+Compute last_trace_rule oderiv_example' [i;i].
 
 
 
 (** TRACE VALIDITY *)
 
-CoInductive Trace: TraceType -> oderivation -> Prop := 
-  | TraceCons t1 t2 n T d a1 a2: 
+CoInductive Trace: TraceType -> derivation -> Prop := 
+  | TraceCons (t1 t2:FTraceType) n (T:TraceType) d a1 a2: 
                                               Trace (t2 ;; T) d
                                               -> FTrace t1 d a1 -> FTrace t2 d a2 
                                               -> last_trace_rule d a1 = Some (BackEdge n)
@@ -385,11 +375,11 @@ Definition preInf (f:formula)(t:TraceType): Prop :=
                                       /\ 
                         In f (List.map fst (Str_nth m t)).
 
-Definition Inf (f:formula)(t:TraceType)(d:oderivation): Prop := Trace t d /\ preInf f t.
+Definition Inf (f:formula)(t:TraceType)(d:derivation): Prop := Trace t d /\ preInf f t.
 
 (** MINIMUM FOR A GIVEN PATH [t]*)
 
-Definition InfMin (f:formula)(t:TraceType)(d:oderivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> f ≪ G).
+Definition InfMin (f:formula)(t:TraceType)(d:derivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> f ≪ G).
 
 (* Existence and Unicity *)
 
@@ -406,19 +396,39 @@ Admitted.
 
 (** VALIDITY CRITERIA FOR A PATH *)
 
-Definition ValidTrace (t:TraceType)(d:oderivation) : Prop :=
-  Trace t d /\ exists f, (InfMin f t d /\ NuFormula f).
+Definition ValidTrace (t:TraceType)(d:derivation) : Prop :=
+  exists f, (InfMin f t d /\ NuFormula f).
+
+
+Lemma ValidTraceExample: ValidTrace Trace_Example oderiv_example'.
+Proof.
+  unfold Trace_Example, TraceRepeat; exists (ν % 0 ⊕ % 0); split.
+  + split.
+    ++ split.
+      +++ cofix proof. fold TraceRepeat in *. admit.
+      +++ unfold preInf; intros; exists n; simpl; intuition.
+              rewrite Str_nth_ex; simpl; left; trivial.
+    ++ intros; destruct H. unfold preInf in H0. pose proof (H0 0); destruct H1; destruct H1.
+       rewrite Str_nth_ex in H2; simpl in H2; destruct H2.
+       +++ subst; apply FL_refl.
+       +++ destruct H2.
+        * subst. simpl. right; left; trivial.
+        * destruct H2; try contradiction; subst; apply FL_refl.
+  + reflexivity.
+Admitted.
 
 (** FOR A DERIVATION *)
 
-Definition ValidityCriteria (d:oderivation): Prop :=
+Definition ValidityCriteria (d:derivation): Prop :=
   forall (t:TraceType), Trace t d -> exists f, (InfMin f t d /\ NuFormula f).
 
+Lemma ValidExample: ValidityCriteria oderiv_example'.
+Proof.
+Admitted.
+ 
 (** DECIDABILITY *)
 
 Definition DecidableValidity : Prop :=
-  forall (d:oderivation), (ValidityCriteria d) \/ ~ (ValidityCriteria d).
-
-
+  forall (d:derivation), (ValidityCriteria d) \/ ~ (ValidityCriteria d).
 
 

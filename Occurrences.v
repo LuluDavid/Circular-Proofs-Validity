@@ -237,7 +237,7 @@ Compute level ctx_example.
 
 (** RULES *)
 
-Inductive orule_kind :=
+Inductive rule_kind :=
   | Ax
   | Cut
   | Ex
@@ -250,7 +250,7 @@ Inductive orule_kind :=
   | BackEdge (n:nat)
   .
 
-Definition print_orule (r:orule_kind) :=
+Definition print_rule (r:rule_kind) :=
   match r with
   | Ax => "(Ax)"
   | Cut => "(Cut)"
@@ -269,8 +269,8 @@ Definition print_orule (r:orule_kind) :=
     (* Only works for numbers between 0 and 9 *)
   end.
 
-Instance orule_eqb : Eqb orule_kind :=
- fix orule_eqb r1 r2 :=
+Instance rule_eqb : Eqb rule_kind :=
+ fix rule_eqb r1 r2 :=
   match r1, r2 with
   | Ax, Ax | Cut, Cut | Ex, Ex | TopR, TopR | BotR, BotR | OneR, OneR | Mu, Mu | Nu, Nu
   | Or_add_l, Or_add_l | Or_add_r, Or_add_r | Or_mult, Or_mult | And_add, And_add 
@@ -279,7 +279,7 @@ Instance orule_eqb : Eqb orule_kind :=
   | _, _ => false
  end.
 
-Instance: EqbSpec orule_kind.
+Instance: EqbSpec rule_kind.
 Proof.
   red.
   fix IH 1. destruct x; destruct y; try cons; cbn.
@@ -290,14 +290,14 @@ Qed.
 
 (** DERIVATIONS *)
 
-Inductive oderivation :=
-  | ORule : list (nat*osequent) -> orule_kind -> osequent -> list oderivation -> oderivation.
+Inductive derivation :=
+  | ORule : list (nat*osequent) -> rule_kind -> osequent -> list derivation -> derivation.
 
 (** Returns the current sequent/bottom sequent *)
 
-Definition oclaim '(ORule _ _ s _) := s.
+Definition claim '(ORule _ _ s _) := s.
 
-Definition oclaim' := (fun (d:oderivation) => oseq_forget (oclaim d)).
+Definition claim' := (fun (d:derivation) => oseq_forget (claim d)).
 
 Definition backedges '(ORule ls _ _ _) := ls.
 
@@ -307,12 +307,12 @@ Definition premisses '(ORule _ _ _ ld) := ld.
 
 (** Utility functions on derivations *)
 
-Instance level_oderivation : Level oderivation :=
- fix level_oderivation d :=
+Instance level_derivation : Level derivation :=
+ fix level_derivation d :=
   let '(ORule _ _ s ds) := d in
-  list_max (level s :: List.map level_oderivation ds).
+  list_max (level s :: List.map level_derivation ds).
 
-Fixpoint combine_eq_length (l l' : list oderivation) := 
+Fixpoint combine_eq_length (l l' : list derivation) := 
       match ((length l) =? (length l')) with
         | true => Some (combine l l')
         | false => None
@@ -322,28 +322,28 @@ Instance ls_eqb : Eqb (nat*osequent) :=
   fix ls_eqb ls1 ls2 :=
     let (n1, s1) := ls1 in (let (n2, s2) := ls2 in (n1 =? n2) && (s1 =? s2)).
     
-Instance eqb_oderivation : Eqb oderivation :=
-  fix eqb_oderivation d1 d2 :=
+Instance eqb_derivation : Eqb derivation :=
+  fix eqb_derivation d1 d2 :=
     let '(ORule ls1 R1 s1 ld1) := d1 in 
     let '(ORule ls2 R2 s2 ld2) := d2 in 
      (ls1 =? ls2) &&& (R1 =? R2) &&& (s1 =? s2) &&& 
      if (length ld1 =? length ld2)
-     then (list_forallb2 eqb_oderivation ld1 ld2)
+     then (list_forallb2 eqb_derivation ld1 ld2)
      else false.
      
-Instance bsubst_oderiv : BSubst oderivation :=
+Instance bsubst_oderiv : BSubst derivation :=
  fix bsubst_oderiv n f d :=
  let '(ORule ls R s ds) := d in
  ORule ls R (s [[ %n := f ]]) (map (bsubst_oderiv n f) ds).
  
-Instance obsubst_oderiv : OBSubst oderivation :=
+Instance obsubst_oderiv : OBSubst derivation :=
  fix obsubst_oderiv n o d :=
  let '(ORule ls R s ds) := d in
  ORule ls R (obsubst n o s ) (map (obsubst_oderiv n o) ds).
 
-Definition OClaim d s := oclaim d = s.
-Arguments OClaim _ _ /.
-Hint Extern 1 (OClaim _ _) => cbn.
+Definition Claim d s := claim d = s.
+Arguments Claim _ _ /.
+Hint Extern 1 (Claim _ _) => cbn.
 
 Definition Backedges d ls := backedges d = ls.
 Arguments Backedges _ _ /.
