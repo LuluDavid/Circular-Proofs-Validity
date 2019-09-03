@@ -23,6 +23,9 @@ criteria for circular proofs. That is why :
 4. BACKEDGING: the backedge rule is introduced as an axiomatic rule: if the current sequent is 
    s and s's formulas appear striclty in one backedgeable sequents, then the current sequent 
    is proved.
+5. LOCALLY NAMELESS ENCODING: the main improvement from Pierre Letouzey's work is locally
+   nameless encoding, which mixes Debruijn Indices and Named free variables, and which is
+   quite handy for demonstration in general
 
 We will introduce then a second notion of validity, which is the "real" validity criteria,
 and once this is done, a side-implementation of omega-automaton will help us demonstrate the 
