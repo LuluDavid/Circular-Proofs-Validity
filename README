@@ -1,7 +1,10 @@
 # CircularProofsValidity
 A Formalization attempt of the Decidability of Circular Proof Validity 
-This implementation is highly inspired from the works of Pierre Letouzey on Natural Deduction
-and Olivier Laurent on Linear Logic:
+This implementation is mainly inspired from the work of Pierre Letouzey on Natural Deduction:
+
+https://gitlab.math.univ-paris-diderot.fr/letouzey/natded
+
+But also from the previous works of Olivier Laurent on Linear Logic:
 
 https://github.com/olaure01/yalla/releases/tag/v2.0 (yalla 2.0) 
 
