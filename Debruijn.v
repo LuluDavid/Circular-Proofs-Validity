@@ -480,7 +480,15 @@ Instance seq_eqb : Eqb sequent :=
 
 Definition ctx_example : context := [(µ((% 0)&(!#(% 0)))); (ν(µ((% 1)&(!#(% 0)))))].
 
-Compute level ctx_example.
+Definition InSeq (f:formula)(s:sequent):= let '( ⊦ Γ) := s in In f Γ. 
+
+Definition InSeqb (f:formula)(s:sequent):= let '( ⊦ Γ) := s in list_mem f Γ. 
+
+
+
+
+
+(** EqbSpec *)
 
 Instance : EqbSpec V.
 Proof.
@@ -509,6 +517,10 @@ Proof.
  intros [] []. cbn. repeat (case eqbspec; try cons).
 Qed.
 
+Lemma InSeq_is_InSeqb: forall s l, InSeq s l <-> InSeqb s l = true.
+Proof.
+  unfold InSeq, InSeqb; destruct l; symmetry; apply list_mem_in.
+Qed.
 
 
 

@@ -350,7 +350,7 @@ ORule [] Nu (⊢ [{ (ν (%0)⊕(%0)), [] }])
           ].
   (*
     ----------------------------------------------------- (BackEdge (⊢vX. X⊕X))
-     [(⊢{ vX. X⊕X, [] })] ⊢ { (vX.X#X), [l,i] }
+     [(⊢{ vX. X⊕X, [] })] ⊢ { (vX.X⊕X), [l,i] }
     ----------------------------------------------------- (⊕l)
      [(⊢{ vX. X⊕X, [] })] ⊢ { (vX.X⊕X) ⊕ (vX.X⊕X) , [i] } 
     ----------------------------------------------------- (v)
@@ -438,36 +438,36 @@ Compute print_oderiv_list oderiv_example'.
 
 (* Sequent provable if it is the conclusion of an existing Valid derivation *)
 
-Definition OProvable (s : osequent) :=
+Definition Provable (s : osequent) :=
   exists d, Valid d /\ Claim d s.
 
-(* OPr s => Provability without backedges *)
+(* Pr s => Provability without backedges *)
 
-Inductive OPr : osequent -> Prop :=
- | R_Ax Γ A a1 a2 : In { A, a1 } Γ -> In { dual A, a2 } Γ -> OPr (⊢ Γ)
- | R_Top Γ a : In { ⊤, a } Γ -> OPr (⊢ Γ)
- | R_Bot Γ a : OPr (⊢ Γ) ->
-                      OPr (⊢ { ⊥, a } :: Γ)
- | R_One a: OPr (⊢ [{ !, a }])
- | R_Or_add_l Γ F G a : OPr (⊢ { F, l::a } :: Γ) -> OPr (⊢ { F⊕G, a } :: Γ)
- | R_Or_add_r Γ F G a : OPr (⊢ { G, r::a } :: Γ) -> OPr (⊢ { F⊕G, a } :: Γ)
- | R_Or_mult Γ F G a: OPr (⊢ { F, l::a } :: { G, r::a } :: Γ) -> OPr (⊢ { F#G, a} :: Γ)
- | R_And_add Γ F G a: OPr (⊢ { F, l::a } :: Γ) -> OPr (⊢ { G, r::a } :: Γ) -> OPr (⊢ { F&G, a } :: Γ)
- | R_And_mult Γ1 Γ2 F G a: OPr (⊢ { F, l::a } :: Γ1) -> OPr (⊢ { G, r::a } :: Γ2) -> OPr (⊢ { F⊗G, a } :: (app Γ1 Γ2))
- | R_Cut A Γ1 Γ2 a1 a2: OPr (⊢ { dual A, a1 } :: Γ1) -> OPr (⊢ { A, a2 } :: Γ2) 
+Inductive Pr : osequent -> Prop :=
+ | R_Ax Γ A a1 a2 : In { A, a1 } Γ -> In { dual A, a2 } Γ -> Pr (⊢ Γ)
+ | R_Top Γ a : In { ⊤, a } Γ -> Pr (⊢ Γ)
+ | R_Bot Γ a : Pr (⊢ Γ) ->
+                      Pr (⊢ { ⊥, a } :: Γ)
+ | R_One a: Pr (⊢ [{ !, a }])
+ | R_Or_add_l Γ F G a : Pr (⊢ { F, l::a } :: Γ) -> Pr (⊢ { F⊕G, a } :: Γ)
+ | R_Or_add_r Γ F G a : Pr (⊢ { G, r::a } :: Γ) -> Pr (⊢ { F⊕G, a } :: Γ)
+ | R_Or_mult Γ F G a: Pr (⊢ { F, l::a } :: { G, r::a } :: Γ) -> Pr (⊢ { F#G, a} :: Γ)
+ | R_And_add Γ F G a: Pr (⊢ { F, l::a } :: Γ) -> Pr (⊢ { G, r::a } :: Γ) -> Pr (⊢ { F&G, a } :: Γ)
+ | R_And_mult Γ1 Γ2 F G a: Pr (⊢ { F, l::a } :: Γ1) -> Pr (⊢ { G, r::a } :: Γ2) -> Pr (⊢ { F⊗G, a } :: (app Γ1 Γ2))
+ | R_Cut A Γ1 Γ2 a1 a2: Pr (⊢ { dual A, a1 } :: Γ1) -> Pr (⊢ { A, a2 } :: Γ2) 
                                         -> disjoint_addr_list a1 (ocontext_addr Γ1)
                                         -> disjoint_addr_list a2 (ocontext_addr Γ2)
-                                        -> OPr (⊢ app Γ1 Γ2)
- | R_Ex F G Γ1 Γ2 : OPr (⊢ app Γ1 (F::G::Γ2)) -> OPr (⊢ app Γ1 (G::F::Γ2))
+                                        -> Pr (⊢ app Γ1 Γ2)
+ | R_Ex F G Γ1 Γ2 : Pr (⊢ app Γ1 (F::G::Γ2)) -> Pr (⊢ app Γ1 (G::F::Γ2))
  | R_Mu F Γ a :
-      OPr (⊢ { F[[ %0 := µ F ]], i::a } :: Γ) -> OPr ((⊢ { (µ F), a }::Γ))
+      Pr (⊢ { F[[ %0 := µ F ]], i::a } :: Γ) -> Pr ((⊢ { (µ F), a }::Γ))
  | R_Nu F Γ a :
-      OPr (⊢ { F[[ %0 := ν F ]], i::a } :: Γ) -> OPr ((⊢ { (ν F), a }::Γ))
+      Pr (⊢ { F[[ %0 := ν F ]], i::a } :: Γ) -> Pr ((⊢ { (ν F), a }::Γ))
   .
-Hint Constructors OPr.
+Hint Constructors Pr.
 
 Theorem thm_example_bis:
-  OPr (⊢[{((// "A")#(dual (// "A"))), []}]).
+  Pr (⊢[{((// "A")#(dual (// "A"))), []}]).
 Proof.
   repeat constructor. apply (R_Ax _ (// "A") [l] [r]); intuition.
 Qed.

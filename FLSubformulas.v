@@ -306,7 +306,6 @@ Proof.
     + rewrite BClosed_MSubst in H0; trivial; left; subst; rewrite BClosed_MSubst; trivial; apply FL_refl.
     + rewrite BClosed_MSubst in *; trivial. admit.
 Admitted.
-Print formula_ind.
 
 
 
@@ -348,11 +347,6 @@ Admitted.
 
 
 (* Lemma on FLMin *)
-
-Lemma FLMinRecApp: forall l1 l2 F f1 f2, FLMinRec l1 F = Some f1 -> FLMinRec l2 F = Some f2
-                                                       -> FLMinRec (l1 ++ l2) F = FLMin [f1; f2].
-Proof.
-Admitted.
 
 Lemma FLMinExists: forall F, 
   BClosed F -> exists G, FLMin (FL F) = Some G.

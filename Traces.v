@@ -5,21 +5,32 @@ Require Import Utils Defs Debruijn Derivations Address Occurrences Subformulas F
 Local Open Scope eqb_scope.
 Local Open Scope form.
 
-(** PRELIMINARY APPROACH: FINITE TRACES FROM THE ROOT TO A LEAF  *)
+(** PRELIMINARY APPROACH: FINITE FROM THE ROOT TO A LEAF  *)
+
+(** Paths *)
+
+Definition FPathType := list sequent.
+
+Inductive preFPath : FPathType -> derivation -> Prop :=
+ | Lf s s' ls R: s = (oseq_forget s') -> preFPath [s] (ORule ls R s' []) 
+ | COne d t R ls s s': 
+                          preFPath t d -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d])
+ | CLeft d d' R ls t s s': 
+                          preFPath t d -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d;d'])
+ | CRight d d' R ls t s s': 
+                          preFPath t d -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d';d]).
+
+Definition preFPathNode (t:FPathType)(d:derivation)(a:address) :=
+  match subderiv d a with
+  | None       => False
+  | Some d'  => preFPath t d'
+  end.
+
+Definition FPath (t:FPathType)(d:derivation)(a:address) : Prop := (Valid d) /\ (preFPathNode t d a). 
+
+(** Traces *)
 
 Definition FTraceType := list (formula*sequent).
-
-Definition InSeq (f:formula)(s:sequent):= let '( ⊦ Γ) := s in In f Γ. 
-
-Definition InSeqb (f:formula)(s:sequent):= let '( ⊦ Γ) := s in list_mem f Γ. 
-
-Lemma InSeq_is_InSeqb: forall s l, InSeq s l <-> InSeqb s l = true.
-Proof.
-  unfold InSeq, InSeqb; destruct l; symmetry; apply list_mem_in.
-Qed.
-
-
-
 
 Inductive preFTrace : FTraceType -> derivation -> Prop :=
  | Leaf f s s' ls R: s = (oseq_forget s') -> InSeq f s -> preFTrace [(f,s)] (ORule ls R s' []) 
@@ -37,9 +48,6 @@ Inductive preFTrace : FTraceType -> derivation -> Prop :=
                           -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d';d])
                         .
 
-
-(** RELATIVELY TO SOME NODE *)
-
 Definition preFTraceNode (t:FTraceType)(d:derivation)(a:address) :=
   match subderiv d a with
   | None       => False
@@ -49,8 +57,11 @@ Definition preFTraceNode (t:FTraceType)(d:derivation)(a:address) :=
 Definition FTrace (t:FTraceType)(d:derivation)(a:address) : Prop := (Valid d) /\ (preFTraceNode t d a). 
 
 
+(** Link between both*)
 
+Definition IsFTrace (t:FTraceType)(p:FPathType): Prop := map snd t = p. 
 
+(** Example *)
 
 Print oderiv_example'.
 
@@ -76,254 +87,41 @@ Proof.
   repeat (constructor; simpl; intuition).
 Qed.
 
-Local Open Scope eqb_scope.
-
-
-
-(** BOOLEAN VERSION *)
-
-Fixpoint preFTraceb (t:FTraceType)(d:derivation) : bool :=
-  let '(ORule ls R s ld) := d in
-  match t, ld with
-  | [(f,s')], [] => (oseq_forget s =? s') &&& (InSeqb f s')
-  | (f,s')::(g,s'')::ls', [d'] => (oseq_forget s =? s') &&& (InSeqb f s') 
-                                    &&& list_mem g (FL f) &&& preFTraceb ((g,s'')::ls') d'
-  | (f,s')::(g,s'')::ls', [d1;d2] => (oseq_forget s =? s') &&& (InSeqb f s') 
-                                    &&& list_mem g (FL f) 
-                                    &&& (preFTraceb ((g,s'')::ls') d1 ||| preFTraceb ((g,s'')::ls') d2)
-  | _, _ => false
-  end.
-
-Definition FTraceb (t:FTraceType)(d:derivation)(a:address) :=
-  (valid_deriv d) && 
-  match subderiv d a with
-  | None       => false
-  | Some d'  => preFTraceb t d'
-  end.
-
-Compute FTraceb FTrace_example oderiv_example' [].
-
-Lemma preFTrace_is_preFtraceb : forall t d, preFTrace t d <-> preFTraceb t d = true.
+(* 
+Lemma FTraceComp: forall f g T d a, (FTrace T d a) -> In f (map fst T) -> In g (map fst T) -> (f ≪ g) \/ (g ≪ f).
 Proof.
-  split; generalize dependent d; induction t; intros.
-  - inversion H.
-  - induction t.
-    -- destruct d; destruct a; simpl in *; inversion H; subst; rewrite Utils.eqb_refl. 
-        rewrite <- InSeq_is_InSeqb; assumption.
-    -- destruct d; destruct a; destruct a0; simpl in *; inversion H; subst.
-      + rewrite Utils.eqb_refl; apply InSeq_is_InSeqb in H11; rewrite H11; apply list_mem_in in H12; rewrite H12;
-         simpl; rewrite IHt; trivial.
-      + rewrite Utils.eqb_refl; apply InSeq_is_InSeqb in H11; rewrite H11; apply list_mem_in in H12; rewrite H12;
-         simpl; rewrite lazy_orb_iff; left; rewrite IHt; trivial.
-      + rewrite Utils.eqb_refl; apply InSeq_is_InSeqb in H11; rewrite H11; apply list_mem_in in H12; rewrite H12;
-         simpl; repeat rewrite lazy_orb_iff; right; rewrite IHt; trivial.
-  - destruct d; discriminate H.
-  - induction t.
-    -- destruct d; destruct a; simpl in *; destruct l0; try discriminate H; 
-        rewrite lazy_andb_iff in H; destruct H; apply Utils.eqb_eq in H; apply InSeq_is_InSeqb in H0; subst; constructor; trivial.
-    -- destruct d; destruct a; destruct a0; simpl in *; destruct l0; try discriminate H; destruct l0.
-      + repeat (rewrite lazy_andb_iff in H; destruct H); apply Utils.eqb_eq in H; 
-         apply list_mem_in in H1; apply InSeq_is_InSeqb in H2; subst.
-         constructor; trivial; apply IHt; trivial.
-      + destruct l0.
-        ++ repeat (rewrite lazy_andb_iff in H; destruct H); rewrite lazy_orb_iff in H0; destruct H0;
-             apply Utils.eqb_eq in H; apply list_mem_in in H1; apply InSeq_is_InSeqb in H2; subst.
-          --- constructor; try apply IHt; trivial.
-          --- apply ConsRight; try apply IHt; trivial.
-        ++ discriminate H.
-Qed.
-
-Theorem FTrace_is_FTraceb : forall a d t, FTrace t d a <-> FTraceb t d a = true.
-Proof.
-  unfold FTrace, FTraceb. split; intros.
-  - destruct H; rewrite andb_true_iff; rewrite valid_deriv_is_Valid; split; try assumption; 
-    unfold preFTraceNode in H0. 
-    destruct (subderiv d a) eqn:Heq.
-    -- apply preFTrace_is_preFtraceb; assumption.
-    -- destruct H0.
-  - apply andb_true_iff in H; destruct H; rewrite <- valid_deriv_is_Valid; split; try assumption;
-    unfold preFTraceNode.
-    destruct (subderiv d a) eqn:Heq.
-    -- apply preFTrace_is_preFtraceb; assumption.
-    -- discriminate H0.
-Qed.
+   intros. destruct H. clear H.
+   unfold preFTraceNode in H2. destruct (subderiv d a); try contradiction.
+   induction H2.
+   - simpl in *; destruct H0; destruct H1; try contradiction; subst; left; apply FL_refl.
+   - simpl in H0; simpl in H1.
+      destruct H0.
+      -- destruct H1.
+        + subst; left; apply FL_refl.
+        + subst. 
+Admitted. *)
 
 
 
 
 
+(** INFINITE APPROACH: STREAMS *)
 
+Require Import  Streams.
 
+Notation "t ;; T" := (Cons t T) (at level 60, right associativity).
 
+Definition PathType: Type := Stream FPathType.
 
+Definition TraceType: Type := Stream FTraceType.
 
+(** Link between both *)
 
-(** AN INFINITE TRACE IS A STREAM OF FINITE TRACES *)
+Definition IsTrace (T:TraceType)(P:PathType): Prop := map (List.map snd) T = P. 
 
-CoInductive TraceType: Type :=
-  | TCons : FTraceType -> TraceType -> TraceType
-  .
+(** Example *)
 
-Notation "t ;; T" := (TCons t T) (at level 60, right associativity).
-
-Ltac coinduction proof :=
-  cofix proof; intros; constructor;
-   [ clear proof | try (apply proof; clear proof) ].
-
-(** Properties on these streams *)
-Section TraceType.
-
-Definition hd (x:TraceType) := match x with
-                            | a ;; _ => a
-                            end.
-
-Definition tl (x:TraceType) := match x with
-                            | _ ;; s => s
-                            end.
-
-Fixpoint Str_nth_tl (n:nat) (s:TraceType) : TraceType :=
-  match n with
-  | O => s
-  | S m => Str_nth_tl m (tl s)
-  end.
-
-Definition Str_nth (n:nat) (s:TraceType): FTraceType := hd (Str_nth_tl n s).
-
-Lemma unfold_TraceType :
- forall x:TraceType, x = match x with
-                      | a ;; s => a ;; s
-                      end.
-Proof.
-  intros; destruct x; trivial.
-Qed.
-
-Lemma tl_nth_tl :
- forall (n:nat) (s:TraceType), tl (Str_nth_tl n s) = Str_nth_tl n (tl s).
-Proof.
-  induction n; intros; simpl; trivial.
-Qed.
-
-Lemma Str_nth_tl_plus :
- forall (n m:nat) (s:TraceType),
-   Str_nth_tl n (Str_nth_tl m s) = Str_nth_tl (n + m) s.
-Proof.
-  induction m; intros; induction n; simpl; trivial.
-  - rewrite <- plus_n_O; trivial.
-  - rewrite <- plus_n_Sm, <- plus_Sn_m. rewrite <- IHm; simpl; reflexivity.
-Qed.
-
-Lemma Str_nth_plus :
- forall (n m:nat) (s:TraceType), Str_nth n (Str_nth_tl m s) = Str_nth (n + m) s.
-Proof.
-  intros; simpl; unfold Str_nth; rewrite Str_nth_tl_plus; trivial.
-Qed.
-
-CoInductive EqSt (s1 s2: TraceType) : Prop :=
-    eqst :
-        hd s1 = hd s2 -> EqSt (tl s1) (tl s2) -> EqSt s1 s2.
-
-Theorem EqSt_reflex : forall s:TraceType, EqSt s s.
-Proof.
-  coinduction EqSt_reflex.
-  reflexivity.
-Qed.
-
-Theorem sym_EqSt : forall s1 s2:TraceType, EqSt s1 s2 -> EqSt s2 s1.
-Proof.
-  coinduction sym_EqSt; inversion H.
-  - symmetry; assumption.
-  - assumption.
-Qed.
-
-Theorem trans_EqSt :
- forall s1 s2 s3:TraceType, EqSt s1 s2 -> EqSt s2 s3 -> EqSt s1 s3.
-Proof.
-  coinduction trans_EqSt; inversion H; inversion H0.
-  - rewrite H1, <- H3; trivial.
-  - eapply trans_EqSt; eassumption.
-Qed.
-
-Theorem eqst_ntheq :
- forall (n:nat) (s1 s2:TraceType), EqSt s1 s2 -> Str_nth n s1 = Str_nth n s2.
-Proof.
-  unfold Str_nth in |- *; simple induction n.
-  intros s1 s2 H; case H; trivial with datatypes.
-  intros m hypind.
-  simpl in |- *.
-  intros s1 s2 H.
-  apply hypind.
-  case H; trivial with datatypes.
-Qed.
-
-Theorem ntheq_eqst :
- forall s1 s2:TraceType,
-   (forall n:nat, Str_nth n s1 = Str_nth n s2) -> EqSt s1 s2.
-Proof.
-  coinduction Equiv2.
-  apply (H 0).
-  intros n; apply (H (S n)).
-Qed.
-
-Section TraceType_Properties.
-
-Variable P : TraceType -> Prop.
-
-
-Inductive Exists ( x: TraceType ) : Prop :=
-  | Here : P x -> Exists x
-  | Further : Exists (tl x) -> Exists x.
-
-CoInductive ForAll (x: TraceType) : Prop :=
-   | HereAndFurther : P x -> ForAll (tl x) -> ForAll x.
-
-Lemma ForAll_Str_nth_tl : forall m x, ForAll x -> ForAll (Str_nth_tl m x).
-Proof.
-  unfold Str_nth in |- *; simple induction m.
-  intros x H; case H; trivial with datatypes.
-  intros n hypind.
-  simpl in |- *.
-  intros x H.
-  apply hypind.
-  case H; trivial with datatypes.
-Qed.
-
-Section Co_Induction_ForAll.
-Variable Inv : TraceType -> Prop.
-Hypothesis InvThenP : forall x:TraceType, Inv x -> P x.
-Hypothesis InvIsStable : forall x:TraceType, Inv x -> Inv (tl x).
-
-Theorem ForAll_coind : forall x:TraceType, Inv x -> ForAll x.
-Proof.
-  coinduction ForAll_coind; auto.
-Qed.
-
-End Co_Induction_ForAll.
-End TraceType_Properties.
-
-Variable f : FTraceType -> FTraceType.
-CoFixpoint map (s:TraceType) : TraceType := (f (hd s)) ;; (map (tl s)).
-
-Lemma Str_nth_tl_map : forall n s, Str_nth_tl n (map s)= map (Str_nth_tl n s).
-Proof.
-  unfold Str_nth in |- *; simple induction n.
-  intros s; trivial with datatypes.
-  intros n0 hypind.
-  simpl in |- *.
-  intros x.
-  apply hypind.
-Qed.
-
-Lemma Str_nth_map : forall n s, Str_nth n (map s)= f (Str_nth n s).
-Proof.
-  unfold Str_nth in |- *; simple induction n.
-  intros s; trivial with datatypes.
-  intros n0 hypind.
-  simpl in |- *.
-  intros s.
-  apply hypind.
-Qed. 
-
-End TraceType.
+CoFixpoint PathRepeat (t:FPathType) := t ;; (PathRepeat t).
 
 CoFixpoint TraceRepeat (t:FTraceType) := t ;; (TraceRepeat t).
 
@@ -340,9 +138,14 @@ Qed.
 
 
 
+
+
+
+(** PATH & TRACE VALIDITY *)
+
 Local Open Scope eqb_scope.
 
-(* Access to the last rule used in [d] following [a] *)
+(** Access to the last rule used in [d] (following address [a] in [d]) *)
 
 Definition last_trace_rule (d:derivation)(a:address) : option rule_kind :=
   match subderiv d a with
@@ -355,12 +158,18 @@ Definition last_trace_rule (d:derivation)(a:address) : option rule_kind :=
 
 Compute last_trace_rule oderiv_example' [i;i].
 
+(** Linking condition between Stream's elements *)
 
-
-(** TRACE VALIDITY *)
+CoInductive Path: PathType -> derivation -> Prop := 
+  | PathCons p1 p2 n P d a1 a2: 
+                                              Path (p2 ;; P) d
+                                              -> FPath p1 d a1 -> FPath p2 d a2 
+                                              -> last_trace_rule d a1 = Some (BackEdge n)
+                                              -> npop n a1 = Some a2
+                                              -> Path (p1 ;; p2 ;; P) d.
 
 CoInductive Trace: TraceType -> derivation -> Prop := 
-  | TraceCons (t1 t2:FTraceType) n (T:TraceType) d a1 a2: 
+  | TraceCons t1 t2 n T d a1 a2: 
                                               Trace (t2 ;; T) d
                                               -> FTrace t1 d a1 -> FTrace t2 d a2 
                                               -> last_trace_rule d a1 = Some (BackEdge n)
@@ -368,20 +177,18 @@ CoInductive Trace: TraceType -> derivation -> Prop :=
                                               -> Trace (t1 ;; t2 ;; T) d.
 
 
-(** INFINITE APPEARANCES *)
+(** Infinite Appearances *)
 
-Definition preInf (f:formula)(t:TraceType): Prop := 
+Definition preInf (f:formula)(T:TraceType): Prop := 
   forall n, exists m, (n <= m) 
                                       /\ 
-                        In f (List.map fst (Str_nth m t)).
+                        In f (List.map fst (Str_nth m T)).
 
 Definition Inf (f:formula)(t:TraceType)(d:derivation): Prop := Trace t d /\ preInf f t.
 
-(** MINIMUM FOR A GIVEN PATH [t]*)
+(** Minimum of Infinite Appearances *)
 
-Definition InfMin (f:formula)(t:TraceType)(d:derivation) : Prop := Inf f t d /\ (forall G, Inf G t d -> f ≪ G).
-
-(* Existence and Unicity *)
+Definition InfMin (f:formula)(T:TraceType)(d:derivation) : Prop := Inf f T d /\ (forall G, Inf G T d -> f ≪ G).
 
 Lemma ExistsMin : forall t d, 
   exists f, InfMin f t d.
@@ -394,10 +201,17 @@ Proof.
 Admitted.
 
 
-(** VALIDITY CRITERIA FOR A PATH *)
 
-Definition ValidTrace (t:TraceType)(d:derivation) : Prop :=
-  exists f, (InfMin f t d /\ NuFormula f).
+
+
+
+
+(** VALIDITY CRITERIA *)
+
+(** For a Trace *)
+
+Definition ValidTrace (T:TraceType)(d:derivation) : Prop :=
+  exists f, (InfMin f T d /\ NuFormula f).
 
 
 Lemma ValidTraceExample: ValidTrace Trace_Example oderiv_example'.
@@ -417,16 +231,21 @@ Proof.
   + reflexivity.
 Admitted.
 
-(** FOR A DERIVATION *)
+(** For a Path *)
+
+Definition ValidPath (P:PathType)(d:derivation) : Prop :=
+  exists T, (IsTrace T P /\ ValidTrace T d).
+
+(** For a Derivation *)
 
 Definition ValidityCriteria (d:derivation): Prop :=
-  forall (t:TraceType), Trace t d -> exists f, (InfMin f t d /\ NuFormula f).
+  forall (P:PathType), Path P d -> ValidPath P d.
 
 Lemma ValidExample: ValidityCriteria oderiv_example'.
 Proof.
 Admitted.
  
-(** DECIDABILITY *)
+(** Decidability *)
 
 Definition DecidableValidity : Prop :=
   forall (d:derivation), (ValidityCriteria d) \/ ~ (ValidityCriteria d).
