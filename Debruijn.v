@@ -253,15 +253,8 @@ Compute    (µ((% 0)&(!#(% 0))))%form
 
 
 (** CONTEXTS *)
-(* Notation context := (list formula).
-    Definition seq_to_ctx  '( ⊦ Γ) :=  Γ.
 
-  Coercion seq_to_ctx : sequent >-> context.
-
-  Compute list_mem ø (⊦ [ø]).
-*)
-
-Definition context := list formula.
+Notation context := (list formula).
 
 Definition print_ctx Γ :=
   String.concat ", " (List.map print_formula Γ).
@@ -278,6 +271,10 @@ Inductive sequent :=
 
 Notation "⊦ F" := (Seq F) (at level 100).
 
+Definition seq_to_ctx  '( ⊦ Γ) :=  Γ.
+
+Coercion seq_to_ctx : sequent >-> context.
+
 Definition print_seq '(⊦ Γ) :=
   " ⊦ " ++ print_ctx Γ.
 
@@ -291,10 +288,6 @@ Instance seq_eqb : Eqb sequent :=
  fun '(⊦ Γ1) '(⊦ Γ2) => (Γ1 =? Γ2).
 
 Definition ctx_example : context := [(µ((% 0)&(!#(% 0)))); (ν(µ((% 1)&(!#(% 0)))))].
-
-Definition InSeq (f:formula)(s:sequent):= let '( ⊦ Γ) := s in In f Γ. 
-
-Definition InSeqb (f:formula)(s:sequent):= let '( ⊦ Γ) := s in list_mem f Γ. 
 
 (** Number of binders in a formula *)
 
@@ -565,11 +558,6 @@ Proof.
 Qed. 
 
 (** Boolean <-> Inductive *)
-
-Lemma InSeq_is_InSeqb: forall s l, InSeq s l <-> InSeqb s l = true.
-Proof.
-  unfold InSeq, InSeqb; destruct l; symmetry; apply list_mem_in.
-Qed.
 
 
 Theorem FixBinders_is_IndBinders: forall n f, 

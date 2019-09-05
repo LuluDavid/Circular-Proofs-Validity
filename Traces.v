@@ -34,18 +34,18 @@ Definition FPath (t:FPathType)(d:derivation)(a:address) : Prop := (Valid d) /\ (
 Definition FTraceType := list (formula*sequent).
 
 Inductive preFTrace : FTraceType -> derivation -> Prop :=
- | Leaf f s s' ls R: s = (oseq_forget s') -> InSeq f s -> preFTrace [(f,s)] (ORule ls R s' []) 
+ | Leaf f s s' ls R: s = (oseq_forget s') -> In f s -> preFTrace [(f,s)] (ORule ls R s' []) 
  | ConsOne d t R ls s0 s s' f1 f2: 
                           preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
-                          -> InSeq f2 s' -> In f1 (FL f2) 
+                          -> In f2 s' -> In f1 (FL f2) 
                           -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d])
  | ConsLeft d d' t R ls s0 s s' f1 f2: 
                           preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
-                          -> InSeq f2 s' -> In f1 (FL f2) 
+                          -> In f2 s' -> In f1 (FL f2) 
                           -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d;d'])
  | ConsRight d d' t R ls s0 s s' f1 f2: 
                           preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
-                          -> InSeq f2 s' -> In f1 (FL f2) 
+                          -> In f2 s' -> In f1 (FL f2) 
                           -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d';d])
                         .
 

@@ -92,7 +92,7 @@ Notation "F == G" := (equiv F G) (at level 100).
 
 (** OCONTEXTS *)
 
-Definition ocontext := list Occurrence.
+Notation ocontext := (list Occurrence).
   
 Definition print_octx Γ :=
   String.concat ", " (List.map print_occurrence Γ).
@@ -109,9 +109,13 @@ Inductive osequent :=
 
 Notation "⊢ Γ" := (SeqO Γ) (at level 100).
 
-Fixpoint oseq_forget (s:osequent): sequent := let '(⊢ Γ) := s in (⊦ (ocontext_forget Γ)).
+Definition oseq_to_octx  '( ⊢ Γ) :=  Γ.
 
-Fixpoint oseq_addr (s:osequent): list address := let '(⊢ Γ) := s in ocontext_addr Γ.
+Coercion oseq_to_octx : osequent >-> ocontext.
+
+Fixpoint oseq_forget (s:osequent): sequent := (⊦ (ocontext_forget s)).
+
+Fixpoint oseq_addr (s:osequent): list address := ocontext_addr s.
 
 Local Open Scope string_scope.
 
@@ -244,9 +248,7 @@ Instance eqb_derivation : Eqb derivation :=
     let '(ORule ls1 R1 s1 ld1) := d1 in 
     let '(ORule ls2 R2 s2 ld2) := d2 in 
      (ls1 =? ls2) &&& (R1 =? R2) &&& (s1 =? s2) &&& 
-     if (length ld1 =? length ld2)
-     then (list_forallb2 eqb_derivation ld1 ld2)
-     else false.
+    (list_forallb2 eqb_derivation ld1 ld2).
 
 Instance bsubst_oderiv : BSubst derivation :=
  fix bsubst_oderiv n f d :=
@@ -298,6 +300,18 @@ Proof.
   case eqbspec; [ intros <- | cons ]. intuition.
 Qed.
 
+Instance: EqbSpec (nat*osequent).
+Proof.
+  red. destruct x; destruct y. cbn; case eqbspec; try cons.
+  intros; subst. case eqbspec; try cons.
+Qed.
+
+Instance: EqbSpec derivation.
+Proof.
+  red.
+  fix IH 1. induction x; destruct y; cbn; 
+  do 3 (case eqbspec; try cons; intros); subst.
+Admitted.
 
 (** Dual *)
 

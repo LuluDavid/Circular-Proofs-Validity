@@ -176,20 +176,20 @@ Proof.
  case IHx; cons.
 Defined.
 (* rename swap *)
-Fixpoint list_permutb {A} `{EqbSpec A} (l1 l2: list A): bool :=
+Fixpoint swapb {A} `{EqbSpec A} (l1 l2: list A): bool :=
   match l1, l2 with
   | [], [] => false
   | [_], [_] => false
   | (x1::l1'), (x2::l2') => match l1', l2' with
                                        | (x1'::l1''), (x2'::l2'') 
-                                                => ((x1 =? x2') &&& (x1' =? x2) &&& (l1'' =? l2'')) ||| ((x1 =? x2) &&& list_permutb l1' l2')
+                                                => ((x1 =? x2') &&& (x1' =? x2) &&& (l1'' =? l2'')) ||| ((x1 =? x2) &&& swapb l1' l2')
                                        | _, _ => false
                                       end 
   | _, _ => false
   end.
 
-Lemma list_permutb_pattern {A} `{EqbSpec A}: forall l1 l2 a1 a2,
-  list_permutb (l1 ++ a1 :: a2 :: l2)(l1 ++ a2 :: a1 :: l2) = true.
+Lemma swapb_pattern {A} `{EqbSpec A}: forall l1 l2 a1 a2,
+  swapb (l1 ++ a1 :: a2 :: l2)(l1 ++ a2 :: a1 :: l2) = true.
 Proof.
   intros. generalize dependent l1.
   induction l2; intros; induction l1.
@@ -207,11 +207,11 @@ Proof.
       ++ rewrite lazy_orb_iff; right; rewrite eqb_refl; assumption.
 Qed.
   
-Definition list_permut {A} `{EqbSpec A} (l1 l2:list A): Prop :=
+Definition swap {A} `{EqbSpec A} (l1 l2:list A): Prop :=
   exists a1 a2 h t, l1 = h ++ a1 :: a2 :: t /\ l2 = h ++ a2 :: a1 :: t.
 
-Lemma list_permutb_is_list_permut {A} `{EqbSpec A}:
-  forall (l1 l2: list A), list_permutb l1 l2 = true <->  list_permut l1 l2.
+Lemma swapb_is_swap {A} `{EqbSpec A}:
+  forall (l1 l2: list A), swapb l1 l2 = true <->  swap l1 l2.
 Proof.
   split.
   - destruct l1; destruct l2; intros; try discriminate H1.
@@ -225,8 +225,8 @@ Proof.
          apply eqb_eq in H1; subst;
          destruct H2; destruct H1; destruct H1; destruct H1; destruct H1; rewrite H1; rewrite H2;
          exists x, x0, (a0 :: x1), x2; intuition.
-  - unfold list_permut; intros; destruct H1; destruct H1; destruct H1; destruct H1; destruct H1; subst;
-    apply list_permutb_pattern.
+  - unfold swap; intros; destruct H1; destruct H1; destruct H1; destruct H1; destruct H1; subst;
+    apply swapb_pattern.
 Qed.
 
 Lemma app_one_nil{A}: forall (c:A) (a:list A), not (a ++ [c] = []).

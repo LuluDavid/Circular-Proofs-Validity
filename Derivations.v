@@ -7,7 +7,9 @@ Import Bool.
 
 Local Open Scope form.
 
-(** SUBDERIV *)
+(** DEFINITIONS *)
+
+(** Subderiv *)
 
 Fixpoint subderiv (d:derivation)(a:address): option derivation :=
   let '(ORule ls R s ld) := d in
@@ -20,6 +22,8 @@ Fixpoint subderiv (d:derivation)(a:address): option derivation :=
   end.
 
 Definition is_subderiv (d1 d2: derivation): Prop := exists a, subderiv d2 a = Some d1. 
+
+(** Example *)
 
 Local Open Scope string_scope.
 
@@ -45,30 +49,15 @@ Compute subderiv Subderiv_example [l;i].
 
 
 
-
-(** DEFINITIONS *)
-
 Local Open Scope list_scope.
 Local Open Scope eqb_scope.
 
-(** Utility functions for Validity *)
-
-Fixpoint get (n:nat)(l:list (nat*osequent)): osequent :=
-  match l with
-  | [] => ⊢ []
-  | (n', s)::ls => if (n =? n') then s else get n ls
-  end.
+(** Lift *)
 
 Fixpoint lift (l:list (nat*osequent)): list (nat*osequent) :=
   match l with
   | [] => []
   | (j, F)::ls => (j+1, F)::(lift ls)
-  end.
-  
-Fixpoint count_occ' (l : list Occurrence) (x : formula) : nat := 
-  match l with
-  | [] => 0
-  | { y, a } :: l' => if (x =? y) then 1 + (count_occ' l' x) else (count_occ' l' x)
   end.
 
 (** Transition between backedgeable sequent lists *)
@@ -111,7 +100,7 @@ Definition valid_deriv_step '(ORule ls R s ld) :=
                                | Or_add_l, (⊢ {(F⊕G), a}::Γ) => (Γ' =? {F, (l::a)}::Γ) 
                                | Or_add_r, (⊢ { F⊕G, a }::Γ) => (Γ' =? {G, (r::a)}::Γ)
                                | Or_mult,  (⊢ { F#G, a }::Γ)   => (Γ' =? {F, (l::a)}::{G, (r::a)}::Γ) 
-                               | Ex,  (⊢ Γ)                              => list_permutb Γ Γ' &&& (binary_or_more Γ')
+                               | Ex,  (⊢ Γ)                              => swapb Γ Γ' &&& (binary_or_more Γ')
                                | Mu, (⊢ { µ F, a }::Γ)              => (Γ' =? {F[[ %0 := µ F ]], i::a}::Γ)
                                | Nu, (⊢ { ν F, a }::Γ)              => (Γ' =? {F[[ %0 := ν F ]], i::a}::Γ)
                                | _, _                                        => false
@@ -338,24 +327,7 @@ Compute print_list_string (print_oderiv_list oderiv_example').
 
 (** META *)
 
-(** List_assoc *)
-
 Local Open Scope eqb_scope.
-
-Lemma list_assoc_get_Some : forall n l s, list_assoc n l = Some s -> get n l = s.
-Proof.
-  intros; induction l.
-  -- inversion H.
-  -- simpl in *; destruct a; destruct (n=?n0).
-    + injection H as H; subst; trivial.
-    + apply IHl; assumption.
-Qed.
-
-Lemma list_assoc_get_None : forall n l, list_assoc n l = None -> get n l = (⊢ []).
-Proof.
-  intros; induction l; intros; simpl in *; trivial; destruct a; destruct (n =? n0); 
-  try discriminate H; apply IHl; assumption.
-Qed.
 
 (** EqbSpec *)
 
@@ -365,34 +337,6 @@ Proof.
   destruct x; destruct y; cbn. 
   case eqbspec; [ intros <- | cons ]; case eqbspec; [ intros <- | cons ]; simpl.
   constructor; trivial.
-Qed.
-
-(** Count_occ' *)
-
-Lemma count_occ'_app :  forall l1 l2 f, count_occ' (l1 ++ l2) f = count_occ' l1 f + count_occ' l2 f.
-Proof.
-  induction l1; intros; simpl in *; trivial.
-  destruct a; destruct (f =? F); trivial.
-  rewrite plus_Sn_m; rewrite IHl1; trivial.
-Qed.
-
-Lemma count_occ'_permut : forall o1 o2 l1 l2 f, 
-                                        count_occ' (l1 ++ o1 :: o2 :: l2) f = count_occ' (l1 ++ o2 :: o1 :: l2) f.
-Proof.
-  intros.
-  destruct o1; destruct o2.
-  rewrite count_occ'_app, count_occ'_app; simpl; destruct (f =? F); destruct (f =? F0); trivial.
-Qed.
-
-Lemma count_occ'_in : forall f a l, In {f, a} l -> (1 <= count_occ' l f)%nat.
-Proof.
-  intros. induction l.
-  - inversion H.
-  - simpl; simpl in H. destruct H.
-    + rewrite H, Utils.eqb_refl; omega.
-    + destruct a0; destruct (f =? F)%eqb.
-      ++ constructor; apply IHl; assumption.
-      ++ apply IHl; assumption.
 Qed.
 
 (** NextSequent *)
@@ -492,9 +436,9 @@ Proof.
    + apply list_mem_in_occ in H; destruct H; econstructor; eassumption.
    + apply list_mem_in_occ in H; destruct H; econstructor; eassumption.
    + discriminate H.
-   + apply list_permutb_is_list_permut in H1; do 5 destruct H1; subst; econstructor; mytac;
+   + apply swapb_is_swap in H1; do 5 destruct H1; subst; econstructor; mytac;
          rewrite H2; trivial.
-   + mytac; apply (V_Cut _ _ F o0 o1 _ a a0); mytac; apply disjoint_addr_list_is_disjoint_addr_listb; trivial.
+   + mytac. apply (V_Cut _ _ F l1 l4 _ a a0); mytac; apply disjoint_addr_list_is_disjoint_addr_listb; trivial.
  - induction 1; simpl; trivial;
    try (apply lazy_orb_iff; left; apply list_mem_in_occ; eauto);
    try(apply lazy_andb_iff; split; try (auto with *);
@@ -513,7 +457,7 @@ Proof.
        try apply valid_next_sequent_unary_prop; trivial;
        destruct l; 
        try(destruct Γ1; try discriminate Heq; injection Heq as _ Hd; destruct Γ1; discriminate Hd);
-       split; trivial; rewrite <- Heq; apply list_permutb_pattern.
+       split; trivial; rewrite <- Heq; apply swapb_pattern.
      + rewrite lazy_orb_false; simpl in H; destruct (list_assoc n ls); 
         try contradiction; apply oseq_equiv_is_oseq_equivb; trivial.
 Qed.
