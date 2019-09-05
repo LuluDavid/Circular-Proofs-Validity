@@ -7,9 +7,9 @@ Local Open Scope eqb_scope.
 Local Open Scope list_scope.
 Local Open Scope form.
 
-(** FL-SUBFORMULAS **)
+(** DEFINITIONS *)
 
-(* List of association between bound variables and formulas *)
+(** List: bound variables <-> formulas *)
 
 Definition SubstType := list (nat*formula).
 
@@ -26,6 +26,130 @@ Fixpoint lift (s:SubstType): SubstType :=
   end.
 
 Notation "↑ s" := (lift s) (at level 50).
+
+
+(** Multiple Substitution *)
+
+Fixpoint MSubst(f:formula)(s:SubstType) : formula :=
+  match s with
+  | [] => f
+  | (j, F)::s' => MSubst (f[[ %j := F ]]) s'
+  end.
+
+Definition ClosedMSubst l := forall H, InSubstForm H l -> BClosed H.
+
+Definition LevelMSubst l n := forall H, InSubstForm H l -> level H <= n.
+
+(** Example *)
+
+Definition example_formula : formula := %1 &((%0 # ν (%0 & %1)) # ø).
+Definition example_subst : SubstType := [(0, ⊥);(1, ⊤)].
+  
+Definition example := MSubst example_formula example_subst.
+
+Compute example.
+
+
+(** FL-Subformulas *)
+
+Fixpoint preFL (f:formula)(s:SubstType) : list formula :=
+  match f with
+  | ⊥ | ⊤ | ! | ø => [f]
+  | (// s) => [f] 
+  | (% k) => let F := list_assoc k s in (match F with
+                                                             | None => [f]
+                                                             | Some F' => [F']
+                                                             end
+                                                             )
+  | Op o F G => (MSubst f s) :: (preFL F s) ++ (preFL G s) 
+  | Quant q F => (MSubst f s) :: (preFL F ( (0, (MSubst f s)) :: (↑s)))
+  end.
+
+Definition FL (f:formula) := preFL f [].
+
+Fixpoint noDupFormula (l : list formula) : list formula :=
+    match l with
+      | [] => []
+      | f::fs => if (list_mem f fs) then (noDupFormula fs) else (f::(noDupFormula fs))
+    end.
+
+Definition FLSet (f:formula) := noDupFormula (FL f).
+
+Notation "F ≪ G" := (In F (FL G)) (at level 100).
+
+(** Get the final binding list *)
+
+Fixpoint preGetSubst (f:formula)(s:SubstType) : SubstType :=
+  match f with
+  | ⊥ | ⊤ | ! | ø => []
+  | (// p) => []
+  | (% k) => let F := list_assoc k s in (match F with
+                                                 | None => []
+                                                 | Some F' => s
+                                                 end
+                                                 )
+  | Op o F G => (preGetSubst F s) ++ (preGetSubst G s) 
+  | Quant q F => (preGetSubst F ( (0, (MSubst f s)) :: (↑ s)))
+  end.
+
+Definition getSubst (f:formula) := preGetSubst f [].
+
+
+Fixpoint noDupSubst (s:SubstType) : SubstType :=
+    match s with
+      | [] => []
+      | f::fs => if (list_mem f fs) then (noDupSubst fs) else (f::(noDupSubst fs))
+    end.
+
+Definition getSubstSet (f:formula) := noDupSubst (getSubst f).
+
+Fixpoint InSubst (p:nat*formula) lp : bool := list_mem p lp.
+
+(** Example *)
+
+Local Open Scope string_scope.
+Definition exampleFL1: formula :=  (%0) & (! # (// "X")).
+Definition exampleFL2: formula := µ(ν(%1 & %0)#ø). (* µX. vY. (X & Y) *)
+Compute FLSet exampleFL1.
+Compute FLSet exampleFL2.
+
+Local Open Scope eqb_scope.
+
+Definition G': formula := µ((ν(%1 & %0))#%0).
+Definition F': formula := (ν(G' & %0))#G'.
+
+Compute FLSet F'.
+Compute map level (FLSet F'). 
+
+Compute (FLSet F') =? (FLSet G').
+
+
+(** FL Minimum in a list *)
+
+Fixpoint FLMinRec (l:list formula)(min:formula): option formula :=
+  match l with  
+  | []     => Some min
+  | f::fs => if list_mem f (FL min) then FLMinRec fs min else 
+                                                      if list_mem min (FL f) then FLMinRec fs f else None
+  end.
+
+Definition FLMin (l:list formula) : option formula :=
+  match l with 
+  | []     => None
+  | f::fs => FLMinRec fs f
+  end.
+
+Compute FLMin (FLSet exampleFL1).
+Compute FLMin (FLSet exampleFL2).
+
+
+
+
+
+
+(** META *)
+
+(** Lift *)
 
 Lemma list_assoc_lift : forall n s, list_assoc (S n) (↑s) = list_assoc n s.
 Proof.
@@ -55,34 +179,23 @@ Proof.
     destruct H; try (left; assumption); right; apply IHl; assumption.
 Qed.
 
+Lemma InSubstForm_list_assoc: forall F l, InSubstForm F l <-> exists n, list_assoc n l = Some F.
+Proof.
+Admitted.
+
 Lemma lenght_lift : forall s, length (↑ s) = length s.
 Proof.
   induction s; trivial; destruct a; simpl; rewrite IHs; trivial.
 Qed.
+
+Local Open Scope list_scope.
 
 Lemma app_lift : forall s1 s2, ↑ (s1 ++ s2) = ↑ s1 ++ ↑ s2.
 Proof.
   intros; induction s1; trivial; destruct a; simpl. rewrite IHs1; trivial.
 Qed.
 
-
-
-
-
-(** MULTIPLE SUBSTITUTION *)
-
-Fixpoint MSubst(f:formula)(s:SubstType) : formula :=
-  match s with
-  | [] => f
-  | (j, F)::s' => MSubst (f[[ %j := F ]]) s'
-  end.
-
-Definition example_formula : formula := %1 &((%0 # ν (%0 & %1)) # ø).
-Definition example_subst : SubstType := [(0, ⊥);(1, ⊤)].
-  
-Definition example := MSubst example_formula example_subst.
-
-Compute example.
+(** MSubst *)
 
 Lemma MSubst_Op: forall F1 F2 o s, MSubst (Op o F1 F2) s = Op o (MSubst F1 s) (MSubst F2 s).
 Proof.
@@ -90,16 +203,18 @@ Proof.
   destruct a; simpl. apply IHs.
 Qed.
 
-Lemma MSubst_Quant: forall f q s a b,
-        MSubst (Quant q (form_bsubst a b f)) s = Quant q (MSubst f ((a, b) :: ↑ s)).
+Lemma MSubst_Quant: forall f q s,
+        (MSubst (Quant q f) s) = Quant q (MSubst f (↑ s)).
 Proof.
-  intros; generalize dependent f; generalize dependent a; generalize dependent b; 
+  intros; generalize dependent f;
   induction s; simpl; trivial; intros.
   destruct a; simpl. 
   assert (Hloc: forall n, S n = n+1). 
   { induction n0; trivial; rewrite plus_Sn_m, <- IHn0; trivial. }
   unfold bsubst. simpl. rewrite Hloc. apply IHs.
 Qed.
+
+Local Open Scope nat_scope.
 
 Lemma le_level_MSubst_Cons : forall (G f: formula) l n, 
   form_level G <= n -> MSubst G ((n, f)::l) = MSubst G l.
@@ -140,118 +255,18 @@ Proof.
   apply BClosed_MSubst; trivial.
 Qed.
 
+Lemma MSubst_Swap: forall F G l, ClosedMSubst l -> BClosed G ->
+                                                                 MSubst F ((0, G):: ↑ l) = ((MSubst F (↑ l ))[[ %0 := G ]]).
+Proof.
+   intros; revert dependent F; revert dependent G; induction l; intros.
+   - reflexivity.
+   - destruct a; simpl. unfold ClosedMSubst, InSubstForm in H; simpl in H. rewrite switch_BSubst; trivial.
+    + rewrite <- IHl; trivial.
+      ++ unfold ClosedMSubst; intros; apply H; right; trivial.
+    + apply H; left; trivial.
+Qed.
 
-
-
-
-(** FL = LIST OF FL-SUBFORMULAS *)
-
-Fixpoint preFL (f:formula)(s:SubstType) : list formula :=
-  match f with
-  | ⊥ | ⊤ | ! | ø => [f]
-  | (// s) => [f] 
-  | (% k) => let F := list_assoc k s in (match F with
-                                                             | None => [f]
-                                                             | Some F' => [F']
-                                                             end
-                                                             )
-  | Op o F G => (MSubst f s) :: (preFL F s) ++ (preFL G s) 
-  | Quant q F => (MSubst f s) :: (preFL F ( (0, (MSubst f s)) :: (↑s)))
-  end.
-
-
-
-
-(** GETSUBST RETURNS THE FINAL SUBST LIST *)
-
-Fixpoint preGetSubst (f:formula)(s:SubstType) : SubstType :=
-  match f with
-  | ⊥ | ⊤ | ! | ø => []
-  | (// p) => []
-  | (% k) => let F := list_assoc k s in (match F with
-                                                 | None => []
-                                                 | Some F' => s
-                                                 end
-                                                 )
-  | Op o F G => (preGetSubst F s) ++ (preGetSubst G s) 
-  | Quant q F => (preGetSubst F ( (0, (MSubst f s)) :: (↑ s)))
-  end.
-
-Definition FL (f:formula) := preFL f [].
-
-Definition getSubst (f:formula) := preGetSubst f [].
-
-Fixpoint InSubst (p:nat*formula) lp : bool :=
-  match lp with
-  | [] => false
-  | (n,f)::fs => let (m,g) := p in ((m =? n) && (f =? g))  || InSubst p fs
-  end.
-
-
-
-
-(** FUNCTIONS TO REMOVE DUPLICATAS *)
-
-Fixpoint noDupFormula (l : list formula) : list formula :=
-    match l with
-      | [] => []
-      | f::fs => if (list_mem f fs) then (noDupFormula fs) else (f::(noDupFormula fs))
-    end.
-
-Fixpoint noDupSubst (s:SubstType) : SubstType :=
-    match s with
-      | [] => []
-      | f::fs => if (list_mem f fs) then (noDupSubst fs) else (f::(noDupSubst fs))
-    end.
-
-Definition FLSet (f:formula) := rev (noDupFormula (FL f)).
-
-Definition getSubstSet (f:formula) := noDupSubst (getSubst f).
-
-
-
-
-
-
-
-
-Local Open Scope string_scope.
-Definition exampleFL1: formula :=  (%0) & (! # (// "X")).
-Definition exampleFL2: formula := µ(ν(%1 & %0)#ø). (* µX. vY. (X & Y) *)
-Compute FLSet exampleFL1.
-Compute FLSet exampleFL2.
-
-Local Open Scope eqb_scope.
-Definition G': formula := µ((ν(%1 & %0))#%0).
-Definition F': formula := (ν(G' & %0))#G'.
-
-Compute FLSet F'.
-Compute map level (FLSet F'). (* It seems that the subformulas of a closed formula are all closed *)
-
-Compute (FLSet F') =? (FLSet G').
-
-
-
-Notation "F ≪ G" := (In F (FL G)) (at level 100).
-
-Fixpoint FLMinRec (l:list formula)(min:formula): option formula :=
-  match l with  
-  | []     => Some min
-  | f::fs => if list_mem f (FL min) then FLMinRec fs min else 
-                                                      if list_mem min (FL f) then FLMinRec fs f else None
-  end.
-
-Definition FLMin (l:list formula) : option formula :=
-  match l with 
-  | []     => None
-  | f::fs => FLMinRec fs f
-  end.
-
-Compute FLMin (FLSet exampleFL1).
-Compute FLMin (FLSet exampleFL2).
-
-
-(* Lemmas on FL *)
+(** FL-Subformulas *)
 
 Lemma FL_refl: forall f, f ≪ f.
 Proof.
@@ -293,74 +308,68 @@ Qed.
 
 Local Open Scope list_scope.
 
-Lemma preFL_FL: forall F G l, BClosed F -> In G (preFL F l) -> (G ≪ MSubst F l) \/ InSubstForm G l.
+Lemma preFL_FL: forall F G l, BClosed (MSubst F l) -> In G (preFL F l) -> (G ≪ MSubst F l) \/ InSubstForm G l.
 Proof.
   assert (Hloc': forall F l, (exists n, list_assoc n l = Some F) <-> InSubstForm F l). admit.
-  intros. generalize dependent G; generalize dependent l;
+  intros. revert dependent G; revert dependent l.
   induction F; intros; try destruct v;
   try(destruct H; subst; try contradiction; left; rewrite BClosed_MSubst; 
   unfold BClosed; trivial; try apply FL_refl; reflexivity).
   - admit.
   - admit.
-  - simpl. simpl in H0. destruct H0.
-    + rewrite BClosed_MSubst in H0; trivial; left; subst; rewrite BClosed_MSubst; trivial; apply FL_refl.
-    + rewrite BClosed_MSubst in *; trivial. admit.
+  - simpl in *. destruct H0.
+    + left; subst; apply FL_refl.
+    + admit.
 Admitted.
 
 
 
 Local Open Scope eqb_scope.
 
-Lemma FL_BClosed : forall F G l, BClosed F -> (forall n H, list_assoc n l = Some H -> BClosed H) 
+Lemma FL_BClosed : forall F G l, BClosed (MSubst F l) -> ClosedMSubst l
                                                           -> In G (preFL F l) -> BClosed G.
 Proof.
-  assert (Hloc': forall F l, (exists n, list_assoc n l = Some F) <-> InSubstForm F l). admit.
-  intros; generalize dependent l; induction F; intros; try destruct v;
-  try(inversion H1; subst; trivial; inversion H2).
-  + simpl in H1. destruct (list_assoc n l) eqn:Heq.
-    - apply H0 in Heq; inversion H1; subst; try assumption; inversion H2.
-    -  inversion H1; subst; try assumption; inversion H2.
-  + simpl in H1; destruct H1.
-    - rewrite BClosed_MSubst in H1; trivial; subst; trivial.
-    - apply in_app_iff in H1; apply BClosed_op in H; destruct H; destruct H1.
-      -- eapply IHF1 in H; eassumption.
-      -- eapply IHF2 in H2; eassumption.
-  + simpl in H1; destruct H1.
-    - rewrite BClosed_MSubst in H1; trivial; subst; trivial.
-    - rewrite BClosed_MSubst in H1; trivial. 
-      apply preFL_FL in H1. destruct H1.
-      ++ inversion H. apply (BClosed_MSubst_Unchanged q F (Quant q F) l) in H; trivial. rewrite H in H1.
-           apply (BClosed_quant_bsubst _ _ (Quant q F)) in H3; trivial. 
-           admit.
-      ++ cbn in H1. destruct H1.
-        +++ subst; assumption.
-        +++ apply Hloc' in H1; destruct H1.
-                destruct x.
-                * rewrite list_assoc_lift_zero in H1; discriminate H1.
-                * apply (H0 x); rewrite list_assoc_lift in H1; assumption.
-Admitted.
+  unfold ClosedMSubst; induction F; intros; try destruct v;
+  try(simpl in H1; destruct H1; try contradiction; subst; reflexivity).
+  - simpl in H1; destruct (list_assoc n l) eqn:Heq.
+    + simpl in H1; destruct H1; try contradiction; subst; 
+       eapply H0; apply InSubstForm_list_assoc; exists n; trivial.
+    + simpl in H1; destruct H1; try contradiction; subst. 
+       induction l.
+       ++ inversion H.
+       ++ simpl in H; simpl in Heq; destruct a; unfold bsubst in H; simpl in H;
+            destruct (n=?n0) eqn:Heq'; try discriminate Heq.
+            apply IHl; trivial; intros;
+            apply H0; cbn; right; trivial.
+   - simpl in H1. destruct H1.
+    + subst; trivial.
+    + rewrite MSubst_Op in H; apply BClosed_op in H; destruct H. 
+      apply in_app_iff in H1; destruct H1.
+      ++ eapply IHF1; eassumption. 
+      ++ eapply IHF2; eassumption. 
+   - simpl in H1. destruct H1.
+    + subst; trivial.
+    + apply (IHF _ ((0, MSubst (Quant q F) l) :: ↑ l)); trivial.
+      ++ rewrite MSubst_Swap; trivial.
+           eapply BClosed_quant_bsubst; try eassumption.
+           rewrite MSubst_Quant in H. eassumption.
+      ++ intros. cbn in H3. destruct H3.
+        +++ subst; trivial.
+        +++ fold (InSubstForm H2 (↑ l)) in H3. 
+                apply H0; apply InSubstForm_lift; trivial.
+Qed.
 
 Lemma FL_Forget : forall F G, (F ⋘ G) -> occ_forget F ≪ occ_forget G.
 Proof.
 Admitted.
 
 
-
-(* Lemma on FLMin *)
+(** FLMin *)
 
 Lemma FLMinExists: forall F, 
   BClosed F -> exists G, FLMin (FL F) = Some G.
 Proof.
 Admitted.
-
-
-
-
-
-
-
-
-
 
 
 

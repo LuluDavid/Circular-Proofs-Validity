@@ -46,12 +46,6 @@ Instance occ_obsubst: OBSubst Occurrence :=
   fix occ_obsubst n o' o := 
   let '{ F, A} := o in (let '{ G, B} := o in {  F[[ %n := G ]], A }).
 
-Instance: EqbSpec Occurrence.
-Proof.
-  red. destruct x; destruct y. cbn; case eqbspec; try cons.
-  intros; subst. case eqbspec; try cons.
-Qed.
-
 
 
 
@@ -61,11 +55,6 @@ Qed.
 Fixpoint occ_dual (o:Occurrence): Occurrence :=
   let '(Occ F a) := o in
   { (dual F), (addr_dual a)}.
-
-Lemma occ_dual_inv: forall o, occ_dual (occ_dual o) = o.
-Proof.
-  intros; destruct o; simpl; rewrite dual_inv, addr_dual_inj; trivial.
-Qed.
 
 
 
@@ -89,47 +78,11 @@ Definition equiv (F G:Occurrence) : Prop :=
 Definition equivb (F G:Occurrence) : bool := 
   occ_forget F =? occ_forget G.
 
-Lemma equiv_is_equivb: forall (F G:Occurrence), equiv F G <-> equivb F G = true.
-Proof.
-intros; split; intros; destruct F; destruct G; cbn.
-- try rewrite Utils.eqb_eq. unfold equiv in H; simpl in H; assumption.
-- unfold equivb in H; unfold equiv; simpl; simpl in H; apply Utils.eqb_eq in H; assumption.
-Qed.
+
 
 Notation "F == G" := (equiv F G) (at level 100). 
 
-Lemma equiv_refl: Reflexive equiv.
-Proof.
-  intuition.
-Qed.
 
-Lemma equiv_sym: Symmetric equiv.
-Proof.
-  red; unfold equiv; destruct x; destruct y; simpl; intros; subst; trivial.
-Qed.
-
-Lemma equiv_trans: Transitive equiv.
-Proof.
-  red; unfold equiv; destruct x; destruct y; destruct z; simpl; intros; subst; trivial.
-Qed.
-
-Instance: Equivalence equiv.
-Proof.
-  split; try apply equiv_refl; try apply equiv_sym; try apply equiv_trans.
-Qed.
-
-Lemma list_mem_in_occ: forall F l, list_mem F (map occ_forget l) = true <-> exists a, In {F,a} l.
-Proof.
-  split; induction l; intros.
-  - inversion H.
-  - simpl in H; apply lazy_orb_iff in H; destruct H.
-    + apply Utils.eqb_eq in H; destruct a; exists a; simpl in *; subst; left; trivial.
-    + apply IHl in H; destruct H; exists x; right; trivial.
-  - inversion H; inversion H0.
-  - destruct H; simpl in *; apply lazy_orb_iff; destruct H.
-    + rewrite H; left; simpl; apply Utils.eqb_refl.
-    + right; apply IHl; exists x; trivial.
-Qed.
 
 
 
@@ -143,13 +96,6 @@ Definition ocontext := list Occurrence.
   
 Definition print_octx Γ :=
   String.concat ", " (List.map print_occurrence Γ).
-
-Instance: EqbSpec ocontext.
-Proof.
-  apply eqbspec_list.
-Qed.
-
-
 
 
 (** OSEQUENTS *)
@@ -185,11 +131,6 @@ Local Open Scope eqb_scope.
 
 Instance oseq_eqb : Eqb osequent :=
  fun '(⊢ Γ1) '(⊢ Γ2) => (Γ1 =? Γ2).
- 
-Instance: EqbSpec osequent.
-Proof.
-  intros [] []. cbn. repeat (case eqbspec; try cons).
-Qed.
 
 
 
@@ -200,13 +141,7 @@ Definition oseq_equiv (s1 s2: osequent) : Prop := (oseq_forget s1) = (oseq_forge
   
 Definition oseq_equivb (s1 s2: osequent) : bool := (oseq_forget s1) =? (oseq_forget s2).
 
-Lemma oseq_equiv_is_oseq_equivb: forall (s1 s2: osequent), 
-  oseq_equiv s1 s2 <-> oseq_equivb s1 s2 = true.
-Proof.
-  split;
-  unfold oseq_equiv, oseq_equivb;
-  apply Utils.eqb_eq.
-Qed.
+
 
 Definition octx_example := [{ (µ((% 0)&(!#(% 0)))), [i;l;r] };{ (ν(µ((% 1)&(!#(% 0))))), [] }].
 
@@ -221,17 +156,6 @@ Definition option_oseq_equivb (s1 s2:option osequent): bool :=
    | Some s1, Some s2 => oseq_equivb s1 s2
    | _, _ => false
    end.
-
-Lemma opt_oseq_equiv_is_opt_oseq_equivb: forall (s1 s2: option osequent), 
-  option_oseq_equiv s1 s2 <-> option_oseq_equivb s1 s2 = true.
-Proof.
-  destruct s1; destruct s2; simpl; intuition; apply oseq_equiv_is_oseq_equivb; trivial.
-Qed.
-
-Compute level ctx_example.
-
-
-
 
 
 
@@ -279,13 +203,6 @@ Instance rule_eqb : Eqb rule_kind :=
   | _, _ => false
  end.
 
-Instance: EqbSpec rule_kind.
-Proof.
-  red.
-  fix IH 1. destruct x; destruct y; try cons; cbn.
-  case eqbspec; [ intros <- | cons ]. intuition.
-Qed.
-
 
 
 (** DERIVATIONS *)
@@ -293,7 +210,7 @@ Qed.
 Inductive derivation :=
   | ORule : list (nat*osequent) -> rule_kind -> osequent -> list derivation -> derivation.
 
-(** Returns the current sequent/bottom sequent *)
+(** Accessors *)
 
 Definition claim '(ORule _ _ s _) := s.
 
@@ -305,7 +222,7 @@ Definition rule '(ORule _ R _ _) := R.
 
 Definition premisses '(ORule _ _ _ ld) := ld.
 
-(** Utility functions on derivations *)
+(** Derivation Instances *)
 
 Instance level_derivation : Level derivation :=
  fix level_derivation d :=
@@ -321,7 +238,7 @@ Fixpoint combine_eq_length (l l' : list derivation) :=
 Instance ls_eqb : Eqb (nat*osequent) :=
   fix ls_eqb ls1 ls2 :=
     let (n1, s1) := ls1 in (let (n2, s2) := ls2 in (n1 =? n2) && (s1 =? s2)).
-    
+
 Instance eqb_derivation : Eqb derivation :=
   fix eqb_derivation d1 d2 :=
     let '(ORule ls1 R1 s1 ld1) := d1 in 
@@ -330,7 +247,7 @@ Instance eqb_derivation : Eqb derivation :=
      if (length ld1 =? length ld2)
      then (list_forallb2 eqb_derivation ld1 ld2)
      else false.
-     
+
 Instance bsubst_oderiv : BSubst derivation :=
  fix bsubst_oderiv n f d :=
  let '(ORule ls R s ds) := d in
@@ -353,17 +270,98 @@ Hint Extern 1 (Backedges _ _) => cbn.
 
 
 
+(** META *)
+
+(** EqbSpec *)
+
+Instance: EqbSpec Occurrence.
+Proof.
+  red. destruct x; destruct y. cbn; case eqbspec; try cons.
+  intros; subst. case eqbspec; try cons.
+Qed.
+
+Instance: EqbSpec ocontext.
+Proof.
+  apply eqbspec_list.
+Qed.
+
+Instance: EqbSpec osequent.
+Proof.
+  intros [] []. cbn. repeat (case eqbspec; try cons).
+Qed.
 
 
+Instance: EqbSpec rule_kind.
+Proof.
+  red.
+  fix IH 1. destruct x; destruct y; try cons; cbn.
+  case eqbspec; [ intros <- | cons ]. intuition.
+Qed.
 
 
+(** Dual *)
+
+Lemma occ_dual_inv: forall o, occ_dual (occ_dual o) = o.
+Proof.
+  intros; destruct o; simpl; rewrite dual_inv, addr_dual_inj; trivial.
+Qed.
+
+(** Equiv *)
+
+Lemma equiv_is_equivb: forall (F G:Occurrence), equiv F G <-> equivb F G = true.
+Proof.
+intros; split; intros; destruct F; destruct G; cbn.
+- try rewrite Utils.eqb_eq. unfold equiv in H; simpl in H; assumption.
+- unfold equivb in H; unfold equiv; simpl; simpl in H; apply Utils.eqb_eq in H; assumption.
+Qed.
+
+Lemma equiv_refl: Reflexive equiv.
+Proof.
+  intuition.
+Qed.
+
+Lemma equiv_sym: Symmetric equiv.
+Proof.
+  red; unfold equiv; destruct x; destruct y; simpl; intros; subst; trivial.
+Qed.
+
+Lemma equiv_trans: Transitive equiv.
+Proof.
+  red; unfold equiv; destruct x; destruct y; destruct z; simpl; intros; subst; trivial.
+Qed.
+
+Instance: Equivalence equiv.
+Proof.
+  split; try apply equiv_refl; try apply equiv_sym; try apply equiv_trans.
+Qed.
 
 
+Lemma list_mem_in_occ: forall F l, list_mem F (map occ_forget l) = true <-> exists a, In {F,a} l.
+Proof.
+  split; induction l; intros.
+  - inversion H.
+  - simpl in H; apply lazy_orb_iff in H; destruct H.
+    + apply Utils.eqb_eq in H; destruct a; exists a; simpl in *; subst; left; trivial.
+    + apply IHl in H; destruct H; exists x; right; trivial.
+  - inversion H; inversion H0.
+  - destruct H; simpl in *; apply lazy_orb_iff; destruct H.
+    + rewrite H; left; simpl; apply Utils.eqb_refl.
+    + right; apply IHl; exists x; trivial.
+Qed.
+
+(** Boolean <-> Inductive *)
+
+Lemma oseq_equiv_is_oseq_equivb: forall (s1 s2: osequent), 
+  oseq_equiv s1 s2 <-> oseq_equivb s1 s2 = true.
+Proof.
+  split;
+  unfold oseq_equiv, oseq_equivb;
+  apply Utils.eqb_eq.
+Qed.
 
 
-
-
-
-
-
-
+Lemma opt_oseq_equiv_is_opt_oseq_equivb: forall (s1 s2: option osequent), 
+  option_oseq_equiv s1 s2 <-> option_oseq_equivb s1 s2 = true.
+Proof.
+  destruct s1; destruct s2; simpl; intuition; apply oseq_equiv_is_oseq_equivb; trivial.
+Qed.

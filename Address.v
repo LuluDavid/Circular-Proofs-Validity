@@ -7,8 +7,9 @@ Local Open Scope string_scope.
 Local Open Scope eqb_scope.
 
 
+(** DEFINITIONS *)
 
- (** ADDRESSES *)
+ (** Addresses *)
  
 Inductive allowed_chars : Type := l | r | i.
 Definition address : Type := list allowed_chars. 
@@ -32,15 +33,10 @@ Instance chars_eqb : Eqb allowed_chars :=
  | _, _ => false
  end.
 
-Instance : EqbSpec allowed_chars.
-Proof.
-red; intros; destruct x; destruct y; try cons. 
-Qed.
-
 Delimit Scope chars_scope with ac.
 Bind Scope chars_scope with allowed_chars.
 
-(** DUAL *)
+(** Dual *)
 
 Fixpoint addr_dual (a:address): address :=
   match a with
@@ -50,22 +46,11 @@ Fixpoint addr_dual (a:address): address :=
   | i :: a' => i :: (addr_dual a')
   end.
 
-Lemma addr_dual_inj: forall a, addr_dual(addr_dual a) = a.
-Proof.
-  intros. induction a; trivial.
-  induction a0.
-  - destruct a; trivial.
-  - destruct a; destruct a0;
-    assert (Hloc: forall c c', addr_dual (addr_dual (c :: c' :: a1)) = c :: addr_dual (addr_dual (c' :: a1)));
-       try rewrite Hloc, IHa; trivial; destruct c; destruct c'; try reflexivity.
-Qed.
 
+(** Sub-Address **)
 
-(** BASIC PROPERTIES ON ADDRESSES **)
-
-(* a sub-adress of a'
- CARREFUL: Prefix becomes Suffix here because we reversed the address order
- *)
+(* A sub-adress of a'
+ CARREFUL: Prefix becomes Suffix here because we reversed the address order *)
  
 Local Open Scope list_scope.
 
@@ -78,6 +63,130 @@ Definition sub_address (a a': address) := sub_address_rev (rev a)(rev a').
 Hint Unfold sub_address.
 
 Notation "a ⊑ b" := (sub_address a b) (at level 100). 
+
+Fixpoint sub_addressb (a a': address): bool :=
+  match a, a' with
+  | [], _ => true
+  | (c::b), (c'::b') => ((c::b) =? (c'::b')) || sub_addressb (c::b) b'
+  | _, _ => false
+  end.
+
+(** Disjointness *)
+
+(* Two Addresses *)
+
+Definition disjoint (a a': address): Prop := ~(sub_address a a') /\ ~(sub_address a' a).
+
+Definition disjointb (a a': address): bool := (negb (sub_addressb a a')) && (negb (sub_addressb a' a)).
+
+
+Definition address1 := [l;i;r;r;i;l;i;r].
+Definition address2 := [r;r;i;l;i;r].
+Definition address3 := [r;r;r;i;l;i;r].
+
+Compute disjointb address1 address3.
+
+Compute disjointb address1 address2.
+
+(* Lists of addresses *)
+
+Definition disjoint_lists (l1 l2:list address) : Prop  := forall (a1 a2: address),
+  In a1 l1 -> In a2 l2 -> disjoint a1 a2.
+
+Inductive disjoint_list : list address -> Prop :=
+ | DEmpty: disjoint_list []
+ | DCons(a:address)(l:list address): (forall a', In a' l -> disjoint a a') -> disjoint_list (a::l).
+
+Definition disjoint_addr_list (a:address)(l:list address) : Prop := forall (a':address),
+  In a' l -> disjoint a a'.
+
+Fixpoint disjoint_addr_listb (a:address)(l:list address) : bool :=
+  match l with
+  | [] => true
+  | a'::l' => disjointb a a' &&& disjoint_addr_listb a l'
+  end.
+
+
+
+
+(** Fresh Address *)
+
+(* Generate an address that would conserve the disjointness of the set if appended :
+    As the addresses are already disjoint, it is just necessary to take the longest one 
+    and change the last character.
+    You just have to notice that if an address (c::list) has length n, you cannot have the same 
+    sub-addresses (r::list)(l::list)(i::list) at the same time in the list of addresses.
+ *)
+
+Compute (map (@length allowed_chars) [[l;r;i];[];[l]]).
+
+Definition max_length (l: list address) : nat := list_max (map (@length allowed_chars) l).
+ 
+Print filter.
+Print length.
+
+Definition max_length_subset (l: list address) : list address :=
+  let M := (max_length l) in 
+  filter (fun (a:address) => (@length allowed_chars a) =? M) l.
+
+Compute max_length_subset [[l;r;i];[];[l]].
+  
+Fixpoint fresh_address (la: list address) : address :=
+  match (max_length_subset la) with
+  | [] => []
+  | a :: la' => match a with
+                  | [] => [] (* cannot happen ! *)
+                  | (i :: a') => (l :: a') (* default left *)
+                  | (_ :: a')=> (i :: a') 
+                  end
+  end.
+
+Compute fresh_address [[i];[r;i];[l;i];[l;r;i]].
+
+Fixpoint npop (n:nat)(a:address): option address :=
+  match n, a with
+  | 0, a' => Some a'
+  | S n', c::a' => npop n' a'
+  | S n', [] => None
+  end.
+
+
+
+
+
+
+
+
+
+
+
+(** META *)
+
+(** EqbSpec *)
+
+Instance : EqbSpec allowed_chars.
+Proof.
+red; intros; destruct x; destruct y; try cons. 
+Qed.
+
+Instance : EqbSpec address.
+Proof.
+  apply eqbspec_list.
+Qed.
+
+(** Dual *)
+
+Lemma addr_dual_inj: forall a, addr_dual(addr_dual a) = a.
+Proof.
+  intros. induction a; trivial.
+  induction a0.
+  - destruct a; trivial.
+  - destruct a; destruct a0;
+    assert (Hloc: forall c c', addr_dual (addr_dual (c :: c' :: a1)) = c :: addr_dual (addr_dual (c' :: a1)));
+       try rewrite Hloc, IHa; trivial; destruct c; destruct c'; try reflexivity.
+Qed.
+
+(** Sub-Address *)
 
 Lemma sub_address_refl: Reflexive sub_address.
 Proof.
@@ -109,13 +218,6 @@ Lemma sub_address_trans: Transitive sub_address.
 Proof.
   red. unfold sub_address. intros. eapply sub_address_rev_trans; eassumption. 
 Qed.
-
-Fixpoint sub_addressb (a a': address): bool :=
-  match a, a' with
-  | [], _ => true
-  | (c::b), (c'::b') => ((c::b) =? (c'::b')) || sub_addressb (c::b) b'
-  | _, _ => false
-  end.
 
 Lemma sub_addressb_refl: forall a, sub_addressb a a = true.
 Proof.
@@ -187,15 +289,9 @@ Proof.
     apply sub_address_rev_is_sub_addressb_reversed in H; assumption. 
 Qed.
 
+(** Disjointness *)
 
-
-
-
-(** DISJOINTNESS *)
-
-(* Two Addresses *)
-
-Definition disjoint (a a': address): Prop := ~(sub_address a a') /\ ~(sub_address a' a).
+(** Two adresses *)
 
 Lemma disjoint_not_refl: forall a a', a = a' -> ~(disjoint a a).
 Proof.
@@ -206,9 +302,6 @@ Lemma disjoint_not_refl_contra: forall a a', disjoint a a' -> a <> a' .
 Proof.
   intros; unfold not; intros; inversion H; subst; destruct H1; apply sub_address_refl.
 Qed.
-
-
-Definition disjointb (a a': address): bool := (negb (sub_addressb a a')) && (negb (sub_addressb a' a)).
 
 Lemma disjoint_is_disjointb: forall a a', disjoint a a' <-> (disjointb a a' = true).
 Proof.
@@ -230,38 +323,8 @@ Proof.
      rewrite sub_address_is_sub_addressb in H1; rewrite negb_true_iff in H; rewrite negb_true_iff in H0; 
      try rewrite H in H1; try rewrite H0 in H1; discriminate H1.
 Qed.
-       
-Definition address1 := [l;i;r;r;i;l;i;r].
-Definition address2 := [r;r;i;l;i;r].
-Definition address3 := [r;r;r;i;l;i;r].
 
-Example test_True: disjoint address1 address3.
-Proof.
-  apply disjoint_is_disjointb; reflexivity.
-Qed.
-
-Example test_False: ~(disjoint address1 address2).
-Proof.
-  unfold not; intros; apply disjoint_is_disjointb in H; discriminate H.
-Qed.
-
-(* Lists of addresses *)
-
-Definition disjoint_lists (l1 l2:list address) : Prop  := forall (a1 a2: address),
-  In a1 l1 -> In a2 l2 -> disjoint a1 a2.
-
-Inductive disjoint_list : list address -> Prop :=
- | DEmpty: disjoint_list []
- | DCons(a:address)(l:list address): (forall a', In a' l -> disjoint a a') -> disjoint_list (a::l).
-
-Definition disjoint_addr_list (a:address)(l:list address) : Prop := forall (a':address),
-  In a' l -> disjoint a a'.
-
-Fixpoint disjoint_addr_listb (a:address)(l:list address) : bool :=
-  match l with
-  | [] => true
-  | a'::l' => disjointb a a' &&& disjoint_addr_listb a l'
-  end.
+(** Two lists of addresses *)
 
 Lemma disjoint_addr_list_is_disjoint_addr_listb: forall a l,
   disjoint_addr_list a l <-> disjoint_addr_listb a l = true.
@@ -277,50 +340,3 @@ Proof.
       + subst; apply disjoint_is_disjointb in H; assumption.
       +  apply IH; assumption.
 Qed.
-
-
-
-
-
-
-(* Generate an address that would conserve the disjointness of the set if appended :
-    As the addresses are already disjoint, it is just necessary to take the longest one 
-    and change the last character.
-    You just have to notice that if an address (c::list) has length n, you cannot have the same 
-    sub-addresses (r::list)(l::list)(i::list) at the same time in the list of addresses.
- *)
-
-Compute (map (@length allowed_chars) [[l;r;i];[];[l]]).
-
-
-Definition max_length (l: list address) : nat := list_max (map (@length allowed_chars) l).
- 
-Print filter.
-Print length.
-
-Definition max_length_subset (l: list address) : list address :=
-  let M := (max_length l) in 
-  filter (fun (a:address) => (@length allowed_chars a) =? M) l.
-
-Compute max_length_subset [[l;r;i];[];[l]].
-  
-Fixpoint fresh_address (la: list address) : address :=
-  match (max_length_subset la) with
-  | [] => []
-  | a :: la' => match a with
-                  | [] => [] (* cannot happen ! *)
-                  | (i :: a') => (l :: a') (* default left *)
-                  | (_ :: a')=> (i :: a') 
-                  end
-  end.
-
-Compute fresh_address [[i];[r;i];[l;i];[l;r;i]].
-
-Fixpoint npop (n:nat)(a:address): option address :=
-  match n, a with
-  | 0, a' => Some a'
-  | S n', c::a' => npop n' a'
-  | S n', [] => None
-  end.
-
-

@@ -9,10 +9,14 @@ Import Bool.
 Require Import Defs Debruijn Suboccurrences.
 Local Open Scope eqb_scope.
 
-(** SUBFORMULAS **)
+(** DEFINITIONS *)
+
+(** Subformulas **)
 
 (* In [subform F G], the second argument G is a subformula of the first argument F.
     This way, [subform F] is the set of the subformulas of F *)
+
+(** Inductive version *)
 
 Inductive Subform: formula -> formula -> Prop :=
 | SRefl (F:formula): Subform F F
@@ -24,7 +28,7 @@ Inductive Subform: formula -> formula -> Prop :=
 Hint Constructors Subform.
 Notation "F ⧼ G" := (Subform G F) (at level 100).
 
-(* Boolean version *)
+(** Boolean version *)
 
 Fixpoint subform_b (F G : formula) := 
 (F =? G) ||
@@ -33,6 +37,13 @@ Fixpoint subform_b (F G : formula) :=
     |(Quant q F), G => (subform_b F G)
     | _, _ => false
     end.
+
+
+
+
+
+
+(** META *)
 
 Theorem subform_b_refl : forall F,
   subform_b F F = true.
@@ -267,11 +278,7 @@ Proof.
       destruct (subform_quant y q); trivial.
 Qed.
 
-
-
-
-
-(** LINK WITH SUBOCCURRENCES *)
+(** Link with suboccurrences *)
 
 Require Import Occurrences.
 

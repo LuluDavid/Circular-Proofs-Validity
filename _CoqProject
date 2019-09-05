@@ -16,3 +16,4 @@ Subformulas.v
 FLSuboccurrences.v
 FLSubformulas.v
 Traces.v
+AltTraces.v

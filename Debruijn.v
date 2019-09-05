@@ -5,7 +5,9 @@ Local Open Scope lazy_bool_scope.
 Local Open Scope string_scope.
 Local Open Scope eqb_scope.
 
-(** VARIABLES *)
+(** DEFINITIONS *)
+
+(** Variables *)
 
 Inductive V :=
   | FVar : variable -> V (** Free 2nd Order Variable (global name) *)
@@ -27,7 +29,7 @@ Bind Scope V_scope with V.
 
 
 
-(** FORMULAS *)
+(** Formulas *)
 
 Inductive formula :=
   | Top
@@ -44,15 +46,6 @@ Fixpoint fsize (F : formula) := match F with
 | Op _ G H => S ((fsize G) + (fsize H))
 | Quant _ G => S (fsize G)
 end.
-
-Local Open Scope nat_scope.
-
-Lemma fsize_pos : forall (F:formula), 0 < fsize F.
-Proof.
-induction F ; simpl; intuition.
-Qed.
-
-(* Notations *)
 
 Delimit Scope formula_scope with form.
 Bind Scope formula_scope with formula.
@@ -82,7 +75,20 @@ Definition NuFormula (f:formula) : Prop :=
   | _ => False
   end.
 
+
+(** Neutral [formula] *)
+
+Definition neutral (f:formula) : Prop := In f [ ⊥ ; ⊤ ; ! ; ø ].
+
+(** Atomic [formula] *)
+Inductive atomic : formula -> Prop :=
+| atomic_var : forall x, atomic (Var x).
+
+
 Definition Naturals:formula := (µ (!⊕(%0))).
+
+
+
 
 
 (** Dual *)
@@ -102,6 +108,264 @@ Fixpoint dual (F : formula) : formula := match F with
 end.
 
 Notation "~ F" := (dual F) (at level 75, right associativity).
+
+
+Definition NaturalsDual := dual Naturals.
+
+
+
+
+
+(** Some generic functions, meant to be overloaded
+    with instances for variables, formulas, context, sequent, ... **)
+
+(** Replace a bound variable with a formula, useful for unfolding **)
+Class BSubst (A : Type) := bsubst : nat -> formula -> A -> A.
+Arguments bsubst {_} {_} _ _ !_.
+
+(** Level : succ of max bounded variable *)
+Class Level (A : Type) := level : A -> nat.
+Arguments level {_} {_} !_.
+
+Hint Unfold BSubst Level.
+
+(** Some generic definitions based on the previous ones *)
+
+Definition BClosed {A}`{Level A} (a:A) := level a = 0.
+
+Hint Unfold BClosed.
+
+Notation "f [[ % n := F ]]" := (bsubst n F f) (at level 150, right associativity) : formula_scope.
+
+Local Open Scope eqb_scope.
+ 
+(** Some structural extensions of these generic functions *)
+
+Instance bsubst_list {A}`{BSubst A} : BSubst (list A) :=
+ fun n t => List.map (bsubst n t).
+
+Instance level_list {A}`{Level A} : Level (list A) :=
+ fun l => list_max (List.map level l).
+ 
+Instance bsubst_pair {A B}`{BSubst A}`{BSubst B} : BSubst (A*B) :=
+ fun n t '(a,b) => (bsubst n t a, bsubst n t b).
+
+Instance level_pair {A B}`{Level A}`{Level B} : Level (A*B) :=
+ fun '(a,b) => Nat.max (level a) (level b).
+
+
+
+
+
+
+
+(** Vars Instances *)
+
+Instance V_level : Level V :=
+ fix V_level v :=
+ match v with
+ | BVar n => S n
+ | FVar v' => 0
+ end.
+
+Definition V_bsubst (n:nat)(u:formula)(v:V): formula :=
+  match v with
+  | FVar v' => Var v
+  | BVar k => if (k =? n) then u else (Var v)
+  end.
+ 
+
+Fixpoint print_formula (f:formula) :=
+  match f with
+  | Bot => "⊥"
+  | Top => "⊤"
+  | One => "1"
+  | Zero => "0"
+  | (% n)%form => "%" ++ (String (ascii_of_nat (48 + n)) "")
+  | (// V)%form => V
+  | Op o f f' =>
+    "{ " ++ print_formula f ++ " }" ++ pr_op o ++ "{ " ++ print_formula f' ++ " }"
+  | Quant q f => pr_quant q ++ "{ " ++ print_formula f ++ " }"
+  end.
+
+Compute print_formula (Naturals).
+Compute print_formula (NaturalsDual).
+
+
+
+
+
+
+(** Formula Instances *)
+
+(** A formula level is the maximum number of missings binders for a binded variable.
+    It means that for a formula F, you need at least level F binders to close the formula. *)
+  
+Instance form_level : Level formula :=
+  fix form_level (f:formula) :=
+  match f with
+  | Top | Bot | One | Zero => 0
+  | Var X  => V_level X 
+  | Op _ f1 f2 => Nat.max (form_level f1) (form_level f2)
+  | Quant _ f' => Nat.pred (form_level f')
+  end.
+
+Compute form_level (µ((% 0)&(!#(% 0))))%form.
+
+(** Important note : [bsubst] below is only intended to be
+    used with a replacement formula [f] which is closed *)
+
+Instance form_bsubst : BSubst formula :=
+ fix form_bsubst n F f :=
+ match f with
+  | Top | Bot | One | Zero  => f
+  | Var V =>  V_bsubst n F V
+  | Op o f1 f2 => Op o (form_bsubst n F f1) (form_bsubst n F f2)
+  | Quant q f' => Quant q (form_bsubst (S n) F f')
+ end.
+
+Definition example1: formula := µ (%1 # (ν %1 & %0)).
+Definition example2:formula := example1[[ %0 := //"A" ]].
+Compute example1.
+Compute example2.
+
+Instance form_eqb : Eqb formula :=
+ fix form_eqb f1 f2 :=
+  match f1, f2 with
+  | Top, Top | Bot, Bot | One, One | Zero, Zero=> true
+  | Var X, Var Y => (X =? Y)%V 
+  | Op o1 f1 f1', Op o2 f2 f2' =>
+    (o1 =? o2) &&&
+    form_eqb f1 f2 &&&
+    form_eqb f1' f2'
+  | Quant q1 f1', Quant q2 f2' =>
+    (q1 =? q2) &&& form_eqb f1' f2'
+  | _,_ => false
+  end.
+
+(* Difference between bounded and free variables *)
+
+Compute    (µ((% 0)&(!#(% 0))))%form 
+                                   =?
+                   (µ((// "V")&(!#(// "V"))))%form.
+
+
+
+
+(** CONTEXTS *)
+(* Notation context := (list formula).
+    Definition seq_to_ctx  '( ⊦ Γ) :=  Γ.
+
+  Coercion seq_to_ctx : sequent >-> context.
+
+  Compute list_mem ø (⊦ [ø]).
+*)
+
+Definition context := list formula.
+
+Definition print_ctx Γ :=
+  String.concat ", " (List.map print_formula Γ).
+
+(** bsubst, level, eqb : given by instances
+    on lists. *)
+
+
+
+(** SEQUENTS *)
+
+Inductive sequent :=
+| Seq : context -> sequent.
+
+Notation "⊦ F" := (Seq F) (at level 100).
+
+Definition print_seq '(⊦ Γ) :=
+  " ⊦ " ++ print_ctx Γ.
+
+Instance bsubst_seq : BSubst sequent :=
+ fun n u '(⊦ Γ ) => (⊦ (Γ[[ %n := u ]]) ).
+
+Instance level_seq : Level sequent :=
+ fun '(⊦ Γ ) => level Γ .
+
+Instance seq_eqb : Eqb sequent :=
+ fun '(⊦ Γ1) '(⊦ Γ2) => (Γ1 =? Γ2).
+
+Definition ctx_example : context := [(µ((% 0)&(!#(% 0)))); (ν(µ((% 1)&(!#(% 0)))))].
+
+Definition InSeq (f:formula)(s:sequent):= let '( ⊦ Γ) := s in In f Γ. 
+
+Definition InSeqb (f:formula)(s:sequent):= let '( ⊦ Γ) := s in list_mem f Γ. 
+
+(** Number of binders in a formula *)
+
+Fixpoint FixBinders (f:formula) :=
+  match f with
+  | Quant _ G => S (FixBinders G)
+  | Op _ F1 F2 => Nat.max (FixBinders F1) (FixBinders F2)
+  | _ => 0
+  end.
+
+Inductive IndBinders: formula -> nat -> Prop :=
+  | NulBot: IndBinders ⊥ 0
+  | NulTop: IndBinders ⊤ 0
+  | NulZero: IndBinders ø 0
+  | NulOne: IndBinders ! 0
+  | NulVar v: IndBinders (Var v) 0
+  | CaseOp F1 F2 n1 n2 n o: IndBinders F1 n1 -> IndBinders F2 n2 
+                                            -> n = Nat.max n1 n2 -> IndBinders (Op o F1 F2) n
+  | Binding F q n: IndBinders F n -> IndBinders (Quant q F) (S n)
+  .
+
+
+
+
+
+
+
+
+
+
+(** META *)
+
+Local Open Scope nat_scope.
+
+(** EqbSpec *)
+
+Instance : EqbSpec V.
+Proof.
+  red.
+  fix IH 1. destruct x as [v|n], y as [v'|n']; cbn; try cons.
+ - case eqbspec; cons.
+ - case eqbspec; cons.
+Qed.
+
+Instance eqbspec_formula: EqbSpec formula.
+Proof.
+  red.
+  fix IH 1. induction x as [ | | | |V|Op F1 IH1 F2 IH2|Quant F IH']; destruct y eqn: Hy; 
+  cbn; try cons; try (case eqbspec; cons).
+  - case eqbspec; [ intros <- | cons ]. case IH1; try cons. case IH2; try cons.
+  - case eqbspec; [ intros <- | cons ]. case IH; cons. 
+Qed.
+
+Instance : EqbSpec context.
+Proof.
+ apply eqbspec_list.
+Qed.
+
+Instance : EqbSpec sequent.
+Proof.
+ intros [] []. cbn. repeat (case eqbspec; try cons).
+Qed.
+
+(** Fsize *)
+
+Lemma fsize_pos : forall (F:formula), 0 < fsize F.
+Proof.
+induction F ; simpl; intuition.
+Qed.
+
+(** Dual *)
 
 Lemma dual_inv : forall F, dual(dual F) = F.
 Proof.
@@ -158,129 +422,7 @@ Proof.
   - destruct (quant_dual F q); assumption.
 Qed.
 
-Definition NaturalsDual := dual Naturals.
-
-
-
-
-
-
-
-(** Some generic functions, meant to be overloaded
-    with instances for variables, formulas, context, sequent, ... **)
-
-(** Replace a bound variable with a formula, useful for unfolding **)
-Class BSubst (A : Type) := bsubst : nat -> formula -> A -> A.
-Arguments bsubst {_} {_} _ _ !_.
-
-(** Level : succ of max bounded variable *)
-Class Level (A : Type) := level : A -> nat.
-Arguments level {_} {_} !_.
-
-Hint Unfold BSubst Level.
-
-(** Some generic definitions based on the previous ones *)
-
-Definition BClosed {A}`{Level A} (a:A) := level a = 0.
-
-Hint Unfold BClosed.
-
-Notation "f [[ % n := F ]]" := (bsubst n F f) (at level 150, right associativity) : formula_scope.
-
-
-
-
-
-
-
-Local Open Scope eqb_scope.
- 
-(** Some structural extensions of these generic functions *)
-
-Instance bsubst_list {A}`{BSubst A} : BSubst (list A) :=
- fun n t => List.map (bsubst n t).
-
-Instance level_list {A}`{Level A} : Level (list A) :=
- fun l => list_max (List.map level l).
- 
-Instance bsubst_pair {A B}`{BSubst A}`{BSubst B} : BSubst (A*B) :=
- fun n t '(a,b) => (bsubst n t a, bsubst n t b).
-
-Instance level_pair {A B}`{Level A}`{Level B} : Level (A*B) :=
- fun '(a,b) => Nat.max (level a) (level b).
-
-
-
-
-
-(** Neutral [formula] *)
-
-Definition neutral (f:formula) : Prop := In f [ ⊥ ; ⊤ ; ! ; ø ].
-
-(** Atomic [formula] *)
-Inductive atomic : formula -> Prop :=
-| atomic_var : forall x, atomic (Var x).
-
-
-
-
-
-
-
-(** VARIABLE INSTANCES *)
-
-Instance V_level : Level V :=
- fix V_level v :=
- match v with
- | BVar n => S n
- | FVar v' => 0
- end.
-
-Definition V_bsubst (n:nat)(u:formula)(v:V): formula :=
-  match v with
-  | FVar v' => Var v
-  | BVar k => if (k =? n) then u else (Var v)
-  end.
- 
-
-Fixpoint print_formula (f:formula) :=
-  match f with
-  | Bot => "⊥"
-  | Top => "⊤"
-  | One => "1"
-  | Zero => "0"
-  | (% n)%form => "%" ++ (String (ascii_of_nat (48 + n)) "")
-  | (// V)%form => V
-  | Op o f f' =>
-    "{ " ++ print_formula f ++ " }" ++ pr_op o ++ "{ " ++ print_formula f' ++ " }"
-  | Quant q f => pr_quant q ++ "{ " ++ print_formula f ++ " }"
-  end.
-
-Compute print_formula (Naturals).
-Compute print_formula (NaturalsDual).
-
-
-
-
-
-
-(** FORMULA INSTANCES *)
-
-(* A formula level is the maximum number of missings binders for a binded variable.
-    It means that for a formula F, you need at least level F binders to close the formula. *)
-  
-Instance form_level : Level formula :=
-  fix form_level (f:formula) :=
-  match f with
-  | Top | Bot | One | Zero => 0
-  | Var X  => V_level X 
-  | Op _ f1 f2 => Nat.max (form_level f1) (form_level f2)
-  | Quant _ f' => Nat.pred (form_level f')
-  end.
-
-Compute form_level (µ((% 0)&(!#(% 0))))%form.
-
-(* Lemmas on Level *)
+(** Level *)
 
 Lemma BClosed_quant: forall F q, BClosed (Quant q F) -> form_level F <= 1.
 Proof.
@@ -305,6 +447,15 @@ Proof.
    destruct H. unfold BClosed, level; simpl. rewrite H, H0; trivial.
 Qed.
 
+Lemma level_op: forall n (F1 F2: formula) (o:op), form_level (Op o F1 F2) <= n 
+                                                                                                    <->   
+                                                                  (form_level F1 <= n ) /\ (form_level F2 <= n).
+Proof.
+  split; intros.
+  - simpl in H. apply max_le in H; trivial.
+  - simpl; apply max_le; trivial.
+Qed.
+
 Lemma level_quant: forall F q n, form_level (Quant q F) <= n -> form_level F <= S n.
 Proof.
   intros; simpl in H; apply le_pred_S in H; assumption.
@@ -315,45 +466,8 @@ Proof.
   intros. eapply level_quant. erewrite H. trivial.
 Qed.
 
-(** Important note : [bsubst] below is only intended to be
-    used with a replacement formula [f] which is closed *)
-
-Instance form_bsubst : BSubst formula :=
- fix form_bsubst n F f :=
- match f with
-  | Top | Bot | One | Zero  => f
-  | Var V =>  V_bsubst n F V
-  | Op o f1 f2 => Op o (form_bsubst n F f1) (form_bsubst n F f2)
-  | Quant q f' => Quant q (form_bsubst (S n) F f')
- end.
-
-Definition example1: formula := µ (%1 # (ν %1 & %0)).
-Definition example2:formula := example1[[ %0 := //"A" ]].
-Compute example1.
-Compute example2.
-
-Instance form_eqb : Eqb formula :=
- fix form_eqb f1 f2 :=
-  match f1, f2 with
-  | Top, Top | Bot, Bot | One, One | Zero, Zero=> true
-  | Var X, Var Y => (X =? Y)%V 
-  | Op o1 f1 f1', Op o2 f2 f2' =>
-    (o1 =? o2) &&&
-    form_eqb f1 f2 &&&
-    form_eqb f1' f2'
-  | Quant q1 f1', Quant q2 f2' =>
-    (q1 =? q2) &&& form_eqb f1' f2'
-  | _,_ => false
-  end.
-
-(* Difference between bounded and free variables *)
-
-Compute    (µ((% 0)&(!#(% 0))))%form 
-                                   =?
-                   (µ((// "V")&(!#(// "V"))))%form.
-
-
-(* Lemmas on level and bsubst *)
+(** BSubst *)
+Local Open Scope eqb_scope.
 
 Lemma level_bsubst n (f g:formula) :
  level f <= S n -> level g <= n ->
@@ -374,7 +488,7 @@ Proof.
     + constructor; assumption.
 Qed.
 
-Lemma le_level_BSubst_unchanged : forall G f n, 
+Lemma le_level_BSubst_unchanged : forall (G f: formula) n, 
   form_level G <= n -> G[[ %n := f ]] = G.
 Proof.
   induction G; intros; try destruct v; try (inversion H0; reflexivity); cbn; simpl; trivial.
@@ -413,13 +527,13 @@ Proof.
   intros; eapply le_level_BSubst; try eassumption; try rewrite H; try rewrite H0; trivial.
 Qed.
 
-Lemma BClosed_bsubst: forall F G k, 
+Lemma BClosed_bsubst: forall (F G: formula) k, 
   BClosed F -> F [[ %k := G ]] = F.
 Proof.
   intros. apply (le_level_BSubst_unchanged F G _); rewrite H; apply le_0_n.
 Qed.
 
-Lemma BClosed_quant_bsubst : forall q F G,
+Lemma BClosed_quant_bsubst : forall q (F G: formula),
   BClosed G -> BClosed (Quant q F) ->  BClosed (F[[ %0 := G ]]).
 Proof.
   intros. unfold BClosed in *. assert (forall n, n <= 0 <-> n = 0). 
@@ -443,107 +557,20 @@ Proof.
   - rewrite IHF; intuition.
 Qed.
 
-
-
-
-(** CONTEXTS *)
-
-Definition context := list formula.
-
-Definition print_ctx Γ :=
-  String.concat ", " (List.map print_formula Γ).
-
-(** bsubst, level, eqb : given by instances
-    on lists. *)
-
-
-
-
-(** SEQUENTS *)
-
-Inductive sequent :=
-| Seq : context -> sequent.
-
-Notation "⊦ F" := (Seq F) (at level 100).
-
-Definition print_seq '(⊦ Γ) :=
-  " ⊦ " ++ print_ctx Γ.
-
-Instance bsubst_seq : BSubst sequent :=
- fun n u '(⊦ Γ ) => (⊦ (Γ[[ %n := u ]]) ).
-
-Instance level_seq : Level sequent :=
- fun '(⊦ Γ ) => level Γ .
-
-Instance seq_eqb : Eqb sequent :=
- fun '(⊦ Γ1) '(⊦ Γ2) => (Γ1 =? Γ2).
-
-Definition ctx_example : context := [(µ((% 0)&(!#(% 0)))); (ν(µ((% 1)&(!#(% 0)))))].
-
-Definition InSeq (f:formula)(s:sequent):= let '( ⊦ Γ) := s in In f Γ. 
-
-Definition InSeqb (f:formula)(s:sequent):= let '( ⊦ Γ) := s in list_mem f Γ. 
-
-
-
-
-
-(** EqbSpec *)
-
-Instance : EqbSpec V.
+Theorem bsubst_prop: forall P (f g:formula), 
+  (forall k, P (f[[%k := g]]) ) -> P f.
 Proof.
-  red.
-  fix IH 1. destruct x as [v|n], y as [v'|n']; cbn; try cons.
- - case eqbspec; cons.
- - case eqbspec; cons.
-Qed.
+  intros. assert (f [[ % level f := g]] = f). { rewrite le_level_BSubst_unchanged; trivial. }
+  rewrite <- H. apply X.
+Qed. 
 
-Instance eqbspec_formula: EqbSpec formula.
-Proof.
-  red.
-  fix IH 1. induction x as [ | | | |V|Op F1 IH1 F2 IH2|Quant F IH']; destruct y eqn: Hy; 
-  cbn; try cons; try (case eqbspec; cons).
-  - case eqbspec; [ intros <- | cons ]. case IH1; try cons. case IH2; try cons.
-  - case eqbspec; [ intros <- | cons ]. case IH; cons. 
-Qed.
-
-Instance : EqbSpec context.
-Proof.
- apply eqbspec_list.
-Qed.
-
-Instance : EqbSpec sequent.
-Proof.
- intros [] []. cbn. repeat (case eqbspec; try cons).
-Qed.
+(** Boolean <-> Inductive *)
 
 Lemma InSeq_is_InSeqb: forall s l, InSeq s l <-> InSeqb s l = true.
 Proof.
   unfold InSeq, InSeqb; destruct l; symmetry; apply list_mem_in.
 Qed.
 
-
-
-
-(* Trying to characterize the number of binders in a formula *)
-
-Fixpoint FixBinders (f:formula) :=
-  match f with
-  | Quant _ G => S (FixBinders G)
-  | Op _ F1 F2 => Nat.max (FixBinders F1) (FixBinders F2)
-  | _ => 0
-  end.
-
-Inductive IndBinders: formula -> nat -> Prop :=
-  | NulBot: IndBinders ⊥ 0
-  | NulTop: IndBinders ⊤ 0
-  | NulZero: IndBinders ø 0
-  | NulOne: IndBinders ! 0
-  | NulVar v: IndBinders (Var v) 0
-  | CaseOp F1 F2 n1 n2 n o: IndBinders F1 n1 -> IndBinders F2 n2 
-                                            -> n = Nat.max n1 n2 -> IndBinders (Op o F1 F2) n
-  | Binding F q n: IndBinders F n -> IndBinders (Quant q F) (S n)
-  .
 
 Theorem FixBinders_is_IndBinders: forall n f, 
   FixBinders f = n <-> IndBinders f n.
@@ -566,16 +593,6 @@ Proof.
 Qed.
 
 
-
-
-
-(* Subst Prop *)
-Theorem bsubst_prop: forall P (f g:formula), 
-  (forall k, P (f[[%k := g]]) ) -> P f.
-Proof.
-  intros. assert (f [[ % level f := g]] = f). { rewrite le_level_BSubst_unchanged; trivial. }
-  rewrite <- H. apply X.
-Qed. 
 
 
 

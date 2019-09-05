@@ -175,7 +175,7 @@ Proof.
  case eqbspec; [ intros <- | cons ].
  case IHx; cons.
 Defined.
-
+(* rename swap *)
 Fixpoint list_permutb {A} `{EqbSpec A} (l1 l2: list A): bool :=
   match l1, l2 with
   | [], [] => false

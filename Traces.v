@@ -1,13 +1,14 @@
 Require Import List.
 Import ListNotations.
 
-Require Import Utils Defs Debruijn Derivations Address Occurrences Subformulas FLSubformulas.
+Require Import Debruijn Derivations Occurrences FLSubformulas.
 Local Open Scope eqb_scope.
 Local Open Scope form.
 
-(** PRELIMINARY APPROACH: FINITE FROM THE ROOT TO A LEAF  *)
 
-(** Paths *)
+(** DEFINITION *)
+
+(** Finite Paths *)
 
 Definition FPathType := list sequent.
 
@@ -28,7 +29,7 @@ Definition preFPathNode (t:FPathType)(d:derivation)(a:address) :=
 
 Definition FPath (t:FPathType)(d:derivation)(a:address) : Prop := (Valid d) /\ (preFPathNode t d a). 
 
-(** Traces *)
+(** FInite Traces *)
 
 Definition FTraceType := list (formula*sequent).
 
@@ -67,7 +68,7 @@ Print oderiv_example'.
 
 (*
     ----------------------------------------------------- (BackEdge (⊢vX. X⊕X))
-     [(⊢{ vX. X⊕X, [] })] ⊢ { (vX.X#X), [l,i] }
+     [(⊢{ vX. X⊕X, [] })] ⊢ { (vX.X⊕X), [l,i] }
     ----------------------------------------------------- (⊕l)
      [(⊢{ vX. X⊕X, [] })] ⊢ { (vX.X⊕X) ⊕ (vX.X⊕X) , [i] } 
     ----------------------------------------------------- (v)
@@ -105,11 +106,11 @@ Admitted. *)
 
 
 
-(** INFINITE APPROACH: STREAMS *)
-
 Require Import  Streams.
 
 Notation "t ;; T" := (Cons t T) (at level 60, right associativity).
+
+(** Infinite Paths/Traces *)
 
 Definition PathType: Type := Stream FPathType.
 
@@ -126,7 +127,6 @@ CoFixpoint PathRepeat (t:FPathType) := t ;; (PathRepeat t).
 CoFixpoint TraceRepeat (t:FTraceType) := t ;; (TraceRepeat t).
 
 Definition Trace_Example := TraceRepeat FTrace_example.
-
 
 Lemma Str_nth_ex : forall n, Str_nth n Trace_Example = FTrace_example.
 Proof.
@@ -200,13 +200,7 @@ Lemma UniqueMin : forall f1 f2 t d,
 Proof.
 Admitted.
 
-
-
-
-
-
-
-(** VALIDITY CRITERIA *)
+(** Validity Criteria *)
 
 (** For a Trace *)
 

@@ -20,6 +20,7 @@ Fixpoint subderiv (d:derivation)(a:address): option derivation :=
   end.
 
 Definition is_subderiv (d1 d2: derivation): Prop := exists a, subderiv d2 a = Some d1. 
+
 Local Open Scope string_scope.
 
 Definition Subderiv_example: derivation := 
@@ -42,24 +43,15 @@ Definition Subderiv_example: derivation :=
   
 Compute subderiv Subderiv_example [l;i].
 
+
+
+
+(** DEFINITIONS *)
+
 Local Open Scope list_scope.
 Local Open Scope eqb_scope.
 
-(* list_mem for sequents *)
-
-Fixpoint InOSequent (s : osequent) (l : list osequent) : bool :=
-    match l with
-       | [] => false
-       | s' :: m => (s' =? s) || (InOSequent s m)
-     end.
-
-
-
-
-
-
-
-(** FUNCTIONS ON LIST OF BACKEDGEABLE SEQUENTS *)
+(** Utility functions for Validity *)
 
 Fixpoint get (n:nat)(l:list (nat*osequent)): osequent :=
   match l with
@@ -72,173 +64,89 @@ Fixpoint lift (l:list (nat*osequent)): list (nat*osequent) :=
   | [] => []
   | (j, F)::ls => (j+1, F)::(lift ls)
   end.
-
-Lemma list_assoc_get_Some : forall n l s, list_assoc n l = Some s -> get n l = s.
-Proof.
-  intros; induction l.
-  -- inversion H.
-  -- simpl in *; destruct a; destruct (n=?n0).
-    + injection H as H; subst; trivial.
-    + apply IHl; assumption.
-Qed.
-
-Lemma list_assoc_get_None : forall n l, list_assoc n l = None -> get n l = (⊢ []).
-Proof.
-  intros; induction l; intros; simpl in *; trivial; destruct a; destruct (n =? n0); 
-  try discriminate H; apply IHl; assumption.
-Qed.
-
-Instance : EqbSpec (nat*osequent).
-Proof.
-  red.
-  destruct x; destruct y; cbn. 
-  case eqbspec; [ intros <- | cons ]; case eqbspec; [ intros <- | cons ]; simpl.
-  constructor; trivial.
-Qed.
-
-Local Open Scope eqb_scope.
-
-
-
-
-
-(** COUNT_OCC' *)
-
+  
 Fixpoint count_occ' (l : list Occurrence) (x : formula) : nat := 
   match l with
   | [] => 0
   | { y, a } :: l' => if (x =? y) then 1 + (count_occ' l' x) else (count_occ' l' x)
   end.
 
-Local Open Scope list_scope.
+(** Transition between backedgeable sequent lists *)
 
-Lemma count_occ'_app :  forall l1 l2 f, count_occ' (l1 ++ l2) f = count_occ' l1 f + count_occ' l2 f.
-Proof.
-  induction l1; intros; simpl in *; trivial.
-  destruct a; destruct (f =? F); trivial.
-  rewrite plus_Sn_m; rewrite IHl1; trivial.
-Qed.
+Definition valid_next_sequent_unary (l1 l2:list(nat*osequent))(s:osequent) := 
+  (l1 =? lift l2) ||| (l1 =? (1, s):: (lift l2)).
 
-Lemma count_occ'_permut : forall o1 o2 l1 l2 f, 
-                                        count_occ' (l1 ++ o1 :: o2 :: l2) f = count_occ' (l1 ++ o2 :: o1 :: l2) f.
-Proof.
-  intros.
-  destruct o1; destruct o2.
-  rewrite count_occ'_app, count_occ'_app; simpl; destruct (f =? F); destruct (f =? F0); trivial.
-Qed.
+Definition valid_next_sequent_binary (l1 l2 l3:list(nat*osequent))(s:osequent) := 
+  ((l2 =? (lift l1)) ||| (l2 =? ((1, s) :: (lift l1))))
+  &&& ((l3 =? (lift l1)) ||| (l3 =? ((1, s) :: (lift l1)))).
 
-Lemma count_occ'_in : forall f a l, In {f, a} l -> (1 <= count_occ' l f)%nat.
-Proof.
-  intros. induction l.
-  - inversion H.
-  - simpl; simpl in H. destruct H.
-    + rewrite H, Utils.eqb_refl; omega.
-    + destruct a0; destruct (f =? F)%eqb.
-      ++ constructor; apply IHl; assumption.
-      ++ apply IHl; assumption.
-Qed.
+(** Explicit pattern matching for 2 <= length l*)
+
+Definition binary_or_more {A:Type} (l:list A): bool :=
+  match l with
+  | x::y::l' => true
+  | _ => false
+  end.
 
 
 
 
-
-
-
-
-
-(** BOOLEAN VERSION OF DERIVATION VALIDITY *)
+(** Boolean Validity *)
 
 Definition valid_deriv_step '(ORule ls R s ld) :=
-  match ls, R, s, List.map claim ld, List.map backedges ld with
-  | ls1, Ax, (⊢ {A,_}::Γ ), [], _               => list_mem (dual A) (map occ_forget Γ)
-  | _, TopR,  (⊢ Γ ), [], _           => list_mem ⊤ (map occ_forget Γ)
-  | _, OneR,  (⊢ [{! ,_}]), [], _               => true
-  | ls1, BotR,  (⊢ {⊥, _}::Γ), [s'], [ls2]  => (s' =? (⊢ Γ)) 
-                                                                       &&& 
-                                                                  ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s):: (lift ls1)))
-
-  | ls1, Or_add_l, (⊢ {(F⊕G), a}::Γ), [s'], [ls2] 
-                                                            => (s' =? (⊢ {F, (l::a)}::Γ)) 
-                                                                      &&& 
-                                                                 ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
-
-  | ls1, Or_add_r, (⊢ { F⊕G, a }::Γ), [s'], [ls2] 
-                                                            => (s' =? (⊢ {G, (r::a)}::Γ))  
-                                                                      &&& 
-                                                                 ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
-
-  | ls1, Or_mult,  (⊢ { F#G, a }::Γ), [s'], [ls2] 
-                                                            => (s' =? (⊢{F, (l::a)}::{G, (r::a)}::Γ)) 
-                                                                     &&& 
-                                                                ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
-
-  | ls1, And_add,  (⊢ { F&G, a }::Γ), [(⊢ {F',a1}::Γ1);(⊢ {G',a2}::Γ2)], [ls2;ls3] 
-                                                          => (F =? F') &&& (G =? G') 
-                                                                              &&& (a1 =? l::a) &&& (a2 =? r::a) 
-                                                                              &&& (Γ1 =? Γ) &&& (Γ2 =? Γ) 
-                                                                              &&& ((ls2 =? (lift ls1)) ||| (ls2 =? ((1, s) :: (lift ls1))))
-                                                                              &&& ((ls3 =? (lift ls1)) ||| (ls3 =? ((1, s) :: (lift ls1))))
-
-  | ls1, And_mult,  (⊢ { F⊗G, a }::Γ), [(⊢ {F',a1}::Γ1);(⊢ {G',a2}::Γ2)], [ls2;ls3]
-                                                          => (F =? F') &&& (G =? G') 
-                                                                              &&& (a1 =? l::a) &&& (a2 =? r::a) 
-                                                                              &&& ((app Γ1 Γ2) =? Γ) 
-                                                                              &&& ((ls2 =? (lift ls1)) ||| (ls2 =? ((1, s) :: (lift ls1))))
-                                                                              &&& ((ls3 =? (lift ls1)) ||| (ls3 =? ((1, s) :: (lift ls1))))
-
-  | ls1, Cut,  (⊢  Γ), [(⊢ {A,a1}:: Γ1);(⊢ {B,a2}:: Γ2)], [ls2;ls3]
-                                                          => ( Γ =? Γ1 ++  Γ2 ) &&& (B =? (dual A))  
-                                                                                            &&& disjoint_addr_listb a1 (ocontext_addr Γ1)
-                                                                                            &&& disjoint_addr_listb a2 (ocontext_addr Γ2)
-                                                                                            &&& ((ls2 =? (lift ls1)) ||| (ls2 =? ((1, s) :: (lift ls1))))
-                                                                                            &&& ((ls3 =? (lift ls1)) ||| (ls3 =? ((1, s) :: (lift ls1))))
-
-  | ls1, Ex,  (⊢ Γ), [(⊢Γ')], [ls2]         => (list_permutb Γ Γ') 
-                                                                      &&& 
-                                                                (2 <=? length Γ)%nat
-                                                                      &&&
-                                                              ((ls2 =? (lift ls1)) ||| (ls2 =? ((1, s) :: (lift ls1))))
-
-  | ls1, Mu, (⊢ { µ F, a }::Γ), [(⊢{G,a'}::Γ')], [ls2] 
-                                                        => (G =? (F[[ %0 := µ F ]]) ) &&& (Γ =? Γ') &&& (a' =? i::a)
-                                                                                        &&& 
-                                                             ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
-
-  | ls1, Nu, (⊢ { ν F, a }::Γ), [(⊢{G,a'}::Γ')], [ls2] 
-                                                       => (G =? (F[[ %0 := ν F ]])) &&& (Γ =? Γ') &&& (a' =? i::a)
-                                                                                        &&& 
-                                                            ((ls2 =? (lift ls1)) ||| (ls2 =? (1, s) :: (lift ls1)))
-
-  | ls, BackEdge n, s, [], _ => match list_assoc n ls with
-                                                | None => false
-                                                | Some s' => oseq_equivb s s'
-                                                end
-  | _,_,_,_,_ => false
-  end.
+  match List.map claim ld, List.map backedges ld with
+  | [], _ => match R, s with
+             | Ax,  (⊢ {A,_}::Γ )   => list_mem (dual A) (map occ_forget Γ)
+             | TopR,  (⊢ Γ )         => list_mem ⊤ (map occ_forget Γ)
+             | OneR,  (⊢ [{! ,_}]) => true
+             | BackEdge n, s      => match list_assoc n ls with 
+                                                  | None      => false
+                                                  | Some s' => oseq_equivb s s'
+                                                  end
+             | _, _                         => false
+             end
+  | [(⊢ Γ')], [ls'] => valid_next_sequent_unary ls' ls s &&&
+                               match R, s with
+                               | BotR,  (⊢ {⊥, _}::Γ)              => (Γ' =? Γ)
+                               | Or_add_l, (⊢ {(F⊕G), a}::Γ) => (Γ' =? {F, (l::a)}::Γ) 
+                               | Or_add_r, (⊢ { F⊕G, a }::Γ) => (Γ' =? {G, (r::a)}::Γ)
+                               | Or_mult,  (⊢ { F#G, a }::Γ)   => (Γ' =? {F, (l::a)}::{G, (r::a)}::Γ) 
+                               | Ex,  (⊢ Γ)                              => list_permutb Γ Γ' &&& (binary_or_more Γ')
+                               | Mu, (⊢ { µ F, a }::Γ)              => (Γ' =? {F[[ %0 := µ F ]], i::a}::Γ)
+                               | Nu, (⊢ { ν F, a }::Γ)              => (Γ' =? {F[[ %0 := ν F ]], i::a}::Γ)
+                               | _, _                                        => false
+                               end
+   | [(⊢ {F',a1}::Γ1);(⊢ {G',a2}::Γ2)], [ls1;ls2]
+                          => valid_next_sequent_binary ls ls1 ls2 s &&&
+                               match R, s with 
+                               | And_add,  (⊢ { F&G, a }::Γ) => (F =? F') &&& (G =? G') &&& 
+                                                                                    (a1 =? l::a) &&& (a2 =? r::a) &&& 
+                                                                                    (Γ1 =? Γ) &&& (Γ2 =? Γ)
+                               | And_mult,  (⊢ { F⊗G, a }::Γ) => (F =? F') &&& (G =? G') &&& 
+                                                                                      (a1 =? l::a) &&& (a2 =? r::a) &&& 
+                                                                                      ((app Γ1 Γ2) =? Γ) 
+                               | Cut,  (⊢  Γ)                             => ( Γ =? Γ1 ++  Γ2 ) &&& (G' =? (dual F'))  
+                                                                                      &&& disjoint_addr_listb a1 (ocontext_addr Γ1)
+                                                                                      &&& disjoint_addr_listb a2 (ocontext_addr Γ2)
+                               | _, _                                          => false
+                               end
+   | _, _ => false
+   end.
 
 Fixpoint valid_deriv d :=
   valid_deriv_step d &&&
    (let '(ORule _ _ _ ld) := d in
     List.forallb (valid_deriv) ld).
 
-Compute valid_deriv_step Subderiv_example.
 
-(* Easier Induction principles for derivations *)
 
-Lemma derivation_ind' (P: derivation -> Prop) :
-  (forall ls r s ds, Forall P ds -> P (ORule ls r s ds)) ->
-  forall d, P d.
-Proof.
- intros Step.
- fix IH 1. destruct d as (ls,r,s,ds).
- apply Step.
- revert ds.
- fix IH' 1. destruct ds; simpl; constructor.
- apply IH.
- apply IH'.
-Qed.
+
+
+(** Example *)
 
 Local Open Scope string_scope.
+
+Compute valid_deriv_step Subderiv_example.
 
 Definition oderiv_example :=
   ORule [] Or_mult (⊢[{ (//"A"#(dual (//"A"))), [r] }]) [ORule [] Ax (⊢[{ //"A", [l;r] }; {dual (//"A"), [r;r]}]) [] ].
@@ -259,13 +167,7 @@ Compute valid_deriv oderiv_example.
 
 
 
-
-
-
-
-(** INDUCTIVE VALIDITY *)
-
-Local Open Scope nat_scope.
+(** Inductive Validity *)
  
 Inductive Valid : derivation -> Prop :=
   
@@ -273,7 +175,7 @@ Inductive Valid : derivation -> Prop :=
                                 -> Valid (ORule ls Ax (⊢ {A, a}::Γ) [])
  | V_Tr Γ ls a: In {⊤, a} Γ 
                        -> Valid (ORule ls TopR (⊢ Γ) [])
- | V_One ls a: Valid (ORule ls OneR (⊢ [{!%form, a}]) [])
+ | V_One ls a: Valid (ORule ls OneR (⊢ [{!, a}]) [])
  | V_Bot d Γ ls a: Valid d 
                              -> Claim d (⊢Γ) 
                              -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{⊥, a}::Γ) :: lift ls)
@@ -327,14 +229,14 @@ Inductive Valid : derivation -> Prop :=
                             -> Claim d (⊢ {F[[ %0 := ν F ]], i::a}::Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢ { (ν F), a }::Γ) :: lift ls)
                             -> Valid (ORule ls Nu (⊢ { (ν F), a }::Γ) [d])
- 
- (** FINALLY, THE BACK-EDGE RULE **)
- 
+
  | V_BackEdge ls s n: option_oseq_equiv (Some s) (list_assoc n ls)
                                                 -> Valid (ORule ls (BackEdge n) s [])
  .
 
 Hint Constructors Valid.
+
+(** Two Examples *)
 
 Definition oderiv_example' :=
 ORule [] Nu (⊢ [{ (ν (%0)⊕(%0)), [] }]) 
@@ -361,10 +263,7 @@ ORule [] Nu (⊢ [{ (ν (%0)⊕(%0)), [] }])
 Theorem thm_oexample: 
   Valid (oderiv_example').
 Proof.
-  constructor.
-  - repeat constructor.
-  - repeat constructor.
-  - right; repeat constructor.
+  repeat (constructor; intuition).
 Qed.
 
 Definition cut_example (F:formula): derivation :=
@@ -397,7 +296,8 @@ Qed.
 Compute (valid_deriv (cut_example (// "X"))).
 
 
-(** PRINTING FUNCTIONS *)
+
+(** Printing functions *)
 
 Definition context_example : context := [(ν (%0)⊕(%0))%form; (µ (%1)#(%0))%form].
 Compute (print_ctx context_example).
@@ -422,96 +322,148 @@ Fixpoint print_oderiv_list (d:derivation): list string :=
 Fixpoint print_list_string (l:list string): string :=
   match l with
   | [] => ""
-  | s::ls => s++"
-  " ++ (print_list_string ls)
+  | s::ls => s++(String "010" (print_list_string ls))
   end.
   
 Definition print_oderiv (d:derivation) : string := print_list_string (print_oderiv_list d).
 
-Compute print_oderiv_list oderiv_example'.
+Compute print_list_string (print_oderiv_list oderiv_example').
 
 
 
 
 
-(** PROVABILITY *)
 
-(* Sequent provable if it is the conclusion of an existing Valid derivation *)
 
-Definition Provable (s : osequent) :=
-  exists d, Valid d /\ Claim d s.
 
-(* Pr s => Provability without backedges *)
+(** META *)
 
-Inductive Pr : osequent -> Prop :=
- | R_Ax Γ A a1 a2 : In { A, a1 } Γ -> In { dual A, a2 } Γ -> Pr (⊢ Γ)
- | R_Top Γ a : In { ⊤, a } Γ -> Pr (⊢ Γ)
- | R_Bot Γ a : Pr (⊢ Γ) ->
-                      Pr (⊢ { ⊥, a } :: Γ)
- | R_One a: Pr (⊢ [{ !, a }])
- | R_Or_add_l Γ F G a : Pr (⊢ { F, l::a } :: Γ) -> Pr (⊢ { F⊕G, a } :: Γ)
- | R_Or_add_r Γ F G a : Pr (⊢ { G, r::a } :: Γ) -> Pr (⊢ { F⊕G, a } :: Γ)
- | R_Or_mult Γ F G a: Pr (⊢ { F, l::a } :: { G, r::a } :: Γ) -> Pr (⊢ { F#G, a} :: Γ)
- | R_And_add Γ F G a: Pr (⊢ { F, l::a } :: Γ) -> Pr (⊢ { G, r::a } :: Γ) -> Pr (⊢ { F&G, a } :: Γ)
- | R_And_mult Γ1 Γ2 F G a: Pr (⊢ { F, l::a } :: Γ1) -> Pr (⊢ { G, r::a } :: Γ2) -> Pr (⊢ { F⊗G, a } :: (app Γ1 Γ2))
- | R_Cut A Γ1 Γ2 a1 a2: Pr (⊢ { dual A, a1 } :: Γ1) -> Pr (⊢ { A, a2 } :: Γ2) 
-                                        -> disjoint_addr_list a1 (ocontext_addr Γ1)
-                                        -> disjoint_addr_list a2 (ocontext_addr Γ2)
-                                        -> Pr (⊢ app Γ1 Γ2)
- | R_Ex F G Γ1 Γ2 : Pr (⊢ app Γ1 (F::G::Γ2)) -> Pr (⊢ app Γ1 (G::F::Γ2))
- | R_Mu F Γ a :
-      Pr (⊢ { F[[ %0 := µ F ]], i::a } :: Γ) -> Pr ((⊢ { (µ F), a }::Γ))
- | R_Nu F Γ a :
-      Pr (⊢ { F[[ %0 := ν F ]], i::a } :: Γ) -> Pr ((⊢ { (ν F), a }::Γ))
-  .
-Hint Constructors Pr.
+(** List_assoc *)
 
-Theorem thm_example_bis:
-  Pr (⊢[{((// "A")#(dual (// "A"))), []}]).
+Local Open Scope eqb_scope.
+
+Lemma list_assoc_get_Some : forall n l s, list_assoc n l = Some s -> get n l = s.
 Proof.
-  repeat constructor. apply (R_Ax _ (// "A") [l] [r]); intuition.
+  intros; induction l.
+  -- inversion H.
+  -- simpl in *; destruct a; destruct (n=?n0).
+    + injection H as H; subst; trivial.
+    + apply IHl; assumption.
 Qed.
 
+Lemma list_assoc_get_None : forall n l, list_assoc n l = None -> get n l = (⊢ []).
+Proof.
+  intros; induction l; intros; simpl in *; trivial; destruct a; destruct (n =? n0); 
+  try discriminate H; apply IHl; assumption.
+Qed.
 
+(** EqbSpec *)
 
+Instance : EqbSpec (nat*osequent).
+Proof.
+  red.
+  destruct x; destruct y; cbn. 
+  case eqbspec; [ intros <- | cons ]; case eqbspec; [ intros <- | cons ]; simpl.
+  constructor; trivial.
+Qed.
 
+(** Count_occ' *)
 
+Lemma count_occ'_app :  forall l1 l2 f, count_occ' (l1 ++ l2) f = count_occ' l1 f + count_occ' l2 f.
+Proof.
+  induction l1; intros; simpl in *; trivial.
+  destruct a; destruct (f =? F); trivial.
+  rewrite plus_Sn_m; rewrite IHl1; trivial.
+Qed.
 
-(** TACTICS *)
+Lemma count_occ'_permut : forall o1 o2 l1 l2 f, 
+                                        count_occ' (l1 ++ o1 :: o2 :: l2) f = count_occ' (l1 ++ o2 :: o1 :: l2) f.
+Proof.
+  intros.
+  destruct o1; destruct o2.
+  rewrite count_occ'_app, count_occ'_app; simpl; destruct (f =? F); destruct (f =? F0); trivial.
+Qed.
+
+Lemma count_occ'_in : forall f a l, In {f, a} l -> (1 <= count_occ' l f)%nat.
+Proof.
+  intros. induction l.
+  - inversion H.
+  - simpl; simpl in H. destruct H.
+    + rewrite H, Utils.eqb_refl; omega.
+    + destruct a0; destruct (f =? F)%eqb.
+      ++ constructor; apply IHl; assumption.
+      ++ apply IHl; assumption.
+Qed.
+
+(** NextSequent *)
+
+Lemma valid_next_sequent_unary_prop : forall l1 l2 s,
+  valid_next_sequent_unary l1 l2 s = true <-> (l1 = lift l2) \/ (l1 = (1, s):: (lift l2)).
+Proof.
+  unfold valid_next_sequent_unary; intros.
+  repeat rewrite <- Utils.eqb_eq; rewrite lazy_orb_iff; apply iff_refl.
+Qed.
+
+Lemma valid_next_sequent_binary_prop : forall l1 l2 l3 s,
+  valid_next_sequent_binary l1 l2 l3 s = true <->
+  ((l2 = (lift l1)) \/ (l2 = ((1, s) :: (lift l1)))) /\ ((l3 = (lift l1)) \/ (l3 = ((1, s) :: (lift l1)))).
+Proof.
+  unfold valid_next_sequent_binary; intros.
+  repeat rewrite <- Utils.eqb_eq; rewrite lazy_andb_iff, lazy_orb_iff, lazy_orb_iff; apply iff_refl.
+  Qed.
+
+(** Easier Induction principles for derivations *)
+
+Lemma derivation_ind' (P: derivation -> Prop) :
+  (forall ls r s ds, Forall P ds -> P (ORule ls r s ds)) ->
+  forall d, P d.
+Proof.
+ intros Step.
+ fix IH 1. destruct d as (ls,r,s,ds).
+ apply Step.
+ revert ds.
+ fix IH' 1. destruct ds; simpl; constructor.
+ apply IH.
+ apply IH'.
+Qed.
+
+(** Tactics for proof below *)
 
 Ltac break_step :=
+ rewrite ?lazy_andb_iff, ?andb_true_iff, ?lazy_andb_false in *;
  match goal with
- | H : match _ with true => _ | false => _ end = true |- _ =>
-   rewrite !lazy_andb_iff in H
  | H : match claim ?x with _ => _ end = true |- _ =>
-   destruct x; simpl in H; try easy
+   destruct x; simpl in H; try easy 
  | H : match map _ ?x with _ => _ end = true |- _ =>
    destruct x; simpl in H; try easy
+ | H : _ /\ _ |- _ => destruct H as [?H H] 
  | H : match ?x with _ => _ end = true |- _ =>
    destruct x; simpl in H; try easy
  | _ => idtac
  end.
- 
+
 Ltac break :=
+ rewrite ?lazy_andb_iff, ?andb_true_iff, ?lazy_andb_false in *;
  match goal with
- | H : match _ with true => _ | false => _ end = true |- _ =>
-   rewrite !lazy_andb_iff in H
  | H : match claim ?x with _ => _ end = true |- _ =>
    destruct x; simpl in H; try easy; break
  | H : match map _ ?x with _ => _ end = true |- _ =>
    destruct x; simpl in H; try easy; break
+ | H : _ /\ _ |- _ => destruct H as [?H H]; break
  | H : match ?x with _ => _ end = true |- _ =>
-   destruct x; simpl in H; try easy; break
+    destruct x; simpl in H; try easy; break
  | _ => idtac
  end.
- 
+
 Ltac mytac :=
  cbn in *;
-  break;
- rewrite ?andb_true_r, ?andb_true_iff, ?lazy_andb_iff in *;
+ rewrite ?lazy_andb_iff, ?andb_true_iff, ?lazy_andb_false in *;
  repeat match goal with H : _ /\ _ |- _ => destruct H end;
  repeat match goal with IH : Forall _ _  |- _ => inversion_clear IH end;
- rewrite ?@Utils.eqb_eq in * by auto with typeclass_instances.
+ unfold Claim, BClosed, valid_next_sequent_unary, valid_next_sequent_binary in *; 
+ rewrite ?lazy_orb_iff in *;
+ rewrite ?@Utils.eqb_eq in * by auto with typeclass_instances; subst;
+ simpl in *; trivial.
 
 Ltac rewr :=
  unfold Claim, BClosed in *;
@@ -519,8 +471,10 @@ Ltac rewr :=
  | H: _ = _ |- _ => rewrite H in *; clear H; rewr
  | _ => rewrite ?eqb_refl
  end.
- 
-Local Open Scope eqb_scope.
+
+Local Open Scope list_scope.
+
+(** Boolea <-> Inductive *)
 
 Theorem valid_deriv_is_Valid: forall (d:derivation), 
   valid_deriv d = true <-> Valid d.
@@ -531,90 +485,35 @@ Proof.
    assert (IH' : Forall (fun d => Valid d) ds).
    { rewrite Forall_forall in *. rewrite forallb_forall in *. auto. }
    clear IH H'.
-   cbn in *;
-   break_step; break_step; 
-   try (destruct (list_assoc n ls) eqn:Heq; try discriminate H; 
-   apply oseq_equiv_is_oseq_equivb in H; constructor; rewrite Heq; assumption); break.
-   + destruct o0; cbn in H; simpl in H; try discriminate H; apply lazy_orb_iff in H; destruct o.
-      destruct H.
-      ++ apply Utils.eqb_eq in H. 
-           simpl in H; subst; apply (V_Ax _ _ _ a a0); simpl; left; trivial.
-      ++ apply list_mem_in_occ in H; destruct H; apply (V_Ax _ _ _ a x); trivial; simpl; right; trivial.
-   + destruct H; destruct H; destruct H; destruct H; destruct H.
-      apply Utils.eqb_eq in H; apply Utils.eqb_eq in H4; subst. 
-      inversion_clear IH'; subst.  inversion_clear H4; subst. rewrite lazy_orb_iff in H0. destruct H0.
-     ++ apply lazy_orb_iff in H1. destruct H1; 
-          eapply (V_Cut _ _ F _ _ _ a); simpl; trivial; try (left; apply Utils.eqb_eq; assumption);
-          try (right; apply Utils.eqb_eq; assumption); 
-          rewrite disjoint_addr_list_is_disjoint_addr_listb; assumption.
-     ++ apply lazy_orb_iff in H1. destruct H1; 
-          eapply (V_Cut _ _ F _ _ _ a); simpl; trivial; try (left; apply Utils.eqb_eq; assumption);
-          try (right; apply Utils.eqb_eq; assumption); 
-          rewrite disjoint_addr_list_is_disjoint_addr_listb; assumption.
-   + destruct H; apply lazy_orb_iff in H0; inversion_clear IH'; clear H2.
-      destruct H; apply list_permutb_is_list_permut in H; destruct H.
-      destruct H; destruct H; destruct H; destruct H; subst. constructor; simpl; trivial.
-      repeat rewrite Utils.eqb_eq in H0; assumption. 
-   + mytac; constructor; try assumption; apply lazy_orb_iff in H0; destruct H0; 
-      try (left; apply Utils.eqb_eq; assumption); right; apply Utils.eqb_eq; assumption.
-   + mytac; constructor; try assumption; apply lazy_orb_iff in H0; destruct H0; 
-      try (left; apply Utils.eqb_eq; assumption); right; apply Utils.eqb_eq; assumption.
-   + mytac; constructor; try assumption; apply lazy_orb_iff in H0; destruct H0; 
-      try (left; apply Utils.eqb_eq; assumption); right; apply Utils.eqb_eq; assumption.
-   + mytac. rewrite Utils.eqb_eq in H5; rewrite Utils.eqb_eq in H4; subst.
-     eapply V_And_add; simpl; trivial.
-     ++ apply lazy_orb_iff in H1; destruct H1; try (left; apply Utils.eqb_eq; assumption); 
-          right; apply Utils.eqb_eq; assumption.
-     ++ apply lazy_orb_iff in H0; destruct H0; try (left; apply Utils.eqb_eq; assumption); 
-          right; apply Utils.eqb_eq; assumption.
-   + mytac; rewrite Utils.eqb_eq in H4; rewrite Utils.eqb_eq in H3; subst.
-     constructor; simpl; trivial.
-     ++ apply lazy_orb_iff in H1; destruct H1; try (left; apply Utils.eqb_eq; assumption); 
-          right; apply Utils.eqb_eq; assumption.
-     ++ apply lazy_orb_iff in H0; destruct H0; try (left; apply Utils.eqb_eq; assumption); 
-          right; apply Utils.eqb_eq; assumption.
-   + apply list_mem_in_occ in H; destruct H; apply (V_Tr _ _ x); trivial. 
-   + inversion IH'; subst; constructor; try assumption; destruct H. apply Utils.eqb_eq in H; assumption.
-      apply lazy_orb_iff in H0. destruct H0; try (left; apply Utils.eqb_eq; assumption);
-      right; apply Utils.eqb_eq; assumption.
-   + inversion IH'; subst. 
-      destruct H; destruct H; destruct H. econstructor; try assumption;
-      simpl; apply Utils.eqb_eq in H; apply Utils.eqb_eq in H4; rewrite Utils.eqb_eq in H1; subst; trivial.
-      apply lazy_orb_iff in H0; destruct H0; try (left; apply Utils.eqb_eq; assumption); 
-      right; apply Utils.eqb_eq; assumption.
-   + inversion IH'; subst. 
-      destruct H; destruct H; destruct H. econstructor; try assumption;
-      simpl; apply Utils.eqb_eq in H; apply Utils.eqb_eq in H4; rewrite Utils.eqb_eq in H1; subst; trivial.
-      apply lazy_orb_iff in H0; destruct H0; try (left; apply Utils.eqb_eq; assumption); 
-      right; apply Utils.eqb_eq; assumption.
-- induction 1; simpl; trivial;
-  try(repeat rewrite lazy_andb_iff; split; try(rewrite IHValid; trivial); split; 
-      try(apply Utils.eqb_eq; trivial); apply lazy_orb_iff; rewrite Utils.eqb_eq, Utils.eqb_eq; trivial);
-  try(rewrite H1; rewrite H2; repeat rewrite Utils.eqb_refl; repeat rewrite lazy_andb_iff;
-         repeat rewrite lazy_orb_iff; split; try(split; repeat rewrite Utils.eqb_eq; assumption);
-         rewrite IHValid1, IHValid2; trivial);
-  try (rewrite H0; repeat rewrite Utils.eqb_refl; rewrite lazy_andb_iff; split; try(rewrite IHValid; trivial);
-     rewrite lazy_orb_iff; repeat rewrite Utils.eqb_eq; trivial).
-  + rewrite lazy_orb_false. destruct Γ; try (inversion H; reflexivity); destruct o eqn:Heq.
-     apply list_mem_in_occ; exists a'; trivial.
-  + rewrite lazy_orb_false; apply list_mem_in_occ; exists a; trivial.
-  + rewrite H1; rewrite H2; repeat rewrite Utils.eqb_refl; 
-     repeat rewrite lazy_andb_iff; repeat rewrite lazy_orb_iff; repeat rewrite lazy_andb_iff. 
-     repeat split; try (apply disjoint_addr_list_is_disjoint_addr_listb); trivial;
-     repeat rewrite Utils.eqb_eq; trivial; rewrite IHValid1, IHValid2; trivial.
-  + rewrite H0; repeat rewrite lazy_andb_iff; repeat split.
-    ++ apply list_permutb_pattern.
-    ++ destruct (length (Γ1 ++ F :: G :: Γ2)) eqn:Heq.
-      +++ apply length_zero_iff_nil in Heq; destruct Γ1; inversion Heq.
-      +++ destruct n; trivial. destruct Γ1; simpl in Heq.
-        -- discriminate Heq.
-        -- injection Heq as Heq; apply length_zero_iff_nil in Heq; destruct Γ1; discriminate Heq.
-    ++ apply lazy_orb_iff; repeat rewrite Utils.eqb_eq; trivial.
-    ++ rewrite IHValid; trivial.
-  + destruct (list_assoc n ls) eqn:Heq.
-    ++ destruct (list_assoc_get_Some n ls o); try assumption; rewrite lazy_orb_false; 
-          apply oseq_equiv_is_oseq_equivb; trivial.
-    ++ destruct (list_assoc_get_None n ls); try assumption. inversion H.
+   cbn in *.
+   break_step; break_step;
+   try(econstructor; simpl; destruct (list_assoc n ls); try discriminate H; apply oseq_equiv_is_oseq_equivb; trivial); 
+   break; try (mytac; constructor; mytac; reflexivity).
+   + apply list_mem_in_occ in H; destruct H; econstructor; eassumption.
+   + apply list_mem_in_occ in H; destruct H; econstructor; eassumption.
+   + discriminate H.
+   + apply list_permutb_is_list_permut in H1; do 5 destruct H1; subst; econstructor; mytac;
+         rewrite H2; trivial.
+   + mytac; apply (V_Cut _ _ F o0 o1 _ a a0); mytac; apply disjoint_addr_list_is_disjoint_addr_listb; trivial.
+ - induction 1; simpl; trivial;
+   try (apply lazy_orb_iff; left; apply list_mem_in_occ; eauto);
+   try(apply lazy_andb_iff; split; try (auto with *);
+         rewr; destruct Γ; try (destruct o); apply valid_next_sequent_unary_prop in H1;
+         rewrite Utils.eqb_refl, lazy_andb_iff; split; trivial);
+   try(apply lazy_andb_iff; split; try (auto with *);
+         rewr; rewrite lazy_andb_iff; split; repeat rewrite Utils.eqb_refl; trivial;
+         apply valid_next_sequent_binary_prop; split; trivial).
+   + rewr; repeat rewrite lazy_andb_iff; split; auto.
+      split; try(apply valid_next_sequent_binary_prop; split; trivial);
+           repeat rewrite Utils.eqb_refl; repeat (split; trivial); 
+           apply disjoint_addr_list_is_disjoint_addr_listb; trivial.
+    + rewr; rewrite lazy_andb_iff; split; auto; destruct (Γ1 ++ G :: F :: Γ2) eqn:Heq; 
+       try(destruct Γ1; discriminate Heq);
+       destruct o; repeat rewrite lazy_andb_iff; split; 
+       try apply valid_next_sequent_unary_prop; trivial;
+       destruct l; 
+       try(destruct Γ1; try discriminate Heq; injection Heq as _ Hd; destruct Γ1; discriminate Hd);
+       split; trivial; rewrite <- Heq; apply list_permutb_pattern.
+     + rewrite lazy_orb_false; simpl in H; destruct (list_assoc n ls); 
+        try contradiction; apply oseq_equiv_is_oseq_equivb; trivial.
 Qed.
-
-

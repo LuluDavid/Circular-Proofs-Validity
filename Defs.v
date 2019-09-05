@@ -1,9 +1,8 @@
-Require Export Setoid Morphisms RelationClasses Arith Omega Bool String
+Require Export Morphisms RelationClasses Arith Omega Bool String
                MSetRBT StringOrder List Utils.
 Require DecimalString.
 Import ListNotations.
 Local Open Scope bool_scope.
-Local Open Scope lazy_bool_scope.
 Local Open Scope string_scope.
 Local Open Scope eqb_scope.
 

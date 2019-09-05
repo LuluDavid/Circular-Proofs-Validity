@@ -9,6 +9,8 @@ Require Import Defs Debruijn Occurrences Address Utils.
 
 Local Open Scope eqb_scope.
 
+(** DEFINITIONS *)
+
 (* PreSuboccurrence F G => G is a 'one step away' suboccurrence of F *)
 Inductive PreSuboccurrence: Occurrence -> Occurrence -> Prop :=
   | PBinL (F1 F2:formula)(o:op)(A:address): PreSuboccurrence { (Op o F1 F2), A }  { F1, l::A}
@@ -18,11 +20,7 @@ Inductive PreSuboccurrence: Occurrence -> Occurrence -> Prop :=
 
 Notation "F ⇀ G" := (PreSuboccurrence F G) (at level 100).
 
-
-
-
-
-(** SUBOCCURRENCE *)
+(** Suboccurrence: Inductive version *)
 
 Inductive Suboccurrence: Occurrence -> Occurrence -> Prop :=
   | BinL (F1 F2:formula)(o:op)(A:address): Suboccurrence { (Op o F1 F2), A }  { F1, l::A}
@@ -33,7 +31,8 @@ Inductive Suboccurrence: Occurrence -> Occurrence -> Prop :=
   .
 Hint Constructors Suboccurrence.
 
-(* Boolean version *)
+
+(** Suboccurrence: Boolean version *)
  
 Fixpoint suboccurrence_b_rec ( F:formula )(a:address)(G:Occurrence){ struct F } := 
   ({F,a} =? G) ||
@@ -45,6 +44,24 @@ Fixpoint suboccurrence_b_rec ( F:formula )(a:address)(G:Occurrence){ struct F } 
 
 Definition suboccurrence_b (F G:Occurrence) : bool := 
   let '{ F', a} := F in (suboccurrence_b_rec F' a G).  
+
+(** Example *)
+
+Local Open Scope string_scope.
+
+Definition f1 : Occurrence := { // "X", [r;i;i] }.
+Definition f2 : Occurrence := { µ (%0 & (// "X")), [i] }.
+
+Lemma example_suboccurrence: Suboccurrence f2 f1.
+Proof.
+  unfold f1; unfold f2. repeat econstructor. 
+Qed.
+
+
+
+
+
+(** META *)
 
 Lemma suboccurrence_b_refl : forall (F: Occurrence), suboccurrence_b F F = true.
 Proof.
@@ -96,15 +113,5 @@ Proof.
     -- eapply (Trans _ {F2,(r :: a)} _).
       + constructor.
       + apply IH2; simpl; assumption.
-Qed.
-
-Local Open Scope string_scope.
-
-Definition f1 : Occurrence := { // "X", [r;i;i] }.
-Definition f2 : Occurrence := { µ (%0 & (// "X")), [i] }.
-
-Lemma example_suboccurrence: Suboccurrence f2 f1.
-Proof.
-  unfold f1; unfold f2. repeat econstructor. 
 Qed.
 
