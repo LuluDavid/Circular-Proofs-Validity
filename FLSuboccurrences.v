@@ -1,13 +1,4 @@
-Require Import Defs.
-Require Import StringUtils.
-Require DecimalString.
-Import ListNotations.
-Require Import Arith.
-Import Bool.
-Require Import Debruijn Occurrences Address.
-Local Open Scope string_scope.
-Local Open Scope eqb_scope.
-Local Open Scope form.
+Require Export Occurrences.
 
 (* PreSuboccurrence F G => G is a 'one step away' suboccurrence of F *)
 CoInductive PreFLSuboccurrence: Occurrence -> Occurrence -> Prop :=

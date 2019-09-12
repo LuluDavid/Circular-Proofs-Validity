@@ -1,10 +1,6 @@
-Require Import List.
+Require Export Derivations Subformulas FLSubformulas.
+
 Import ListNotations.
-
-Require Import Debruijn Derivations Occurrences FLSubformulas.
-Local Open Scope eqb_scope.
-Local Open Scope form.
-
 
 (** DEFINITION *)
 
@@ -12,50 +8,50 @@ Local Open Scope form.
 
 Definition FPathType := list sequent.
 
-Inductive preFPath : FPathType -> derivation -> Prop :=
- | Lf s s' ls R: s = (oseq_forget s') -> preFPath [s] (ORule ls R s' []) 
- | COne d t R ls s s': 
-                          preFPath t d -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d])
- | CLeft d d' R ls t s s': 
-                          preFPath t d -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d;d'])
- | CRight d d' R ls t s s': 
-                          preFPath t d -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d';d]).
+Inductive preFPath : FPathType -> derivation -> nat -> Prop :=
+ | CLeaf s s' ls n: s = (oseq_forget s') -> preFPath [s] (ORule ls (BackEdge n) s' []) n 
+ | COne d t R ls s s' n: 
+                          preFPath t d n -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d]) n
+ | CLeft d d' R ls t s s' n: 
+                          preFPath t d n -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d;d']) n
+ | CRight d d' R ls t s s' n: 
+                          preFPath t d n -> s' = oseq_forget s -> preFPath (s'::t) (ORule ls R s [d';d]) n.
 
-Definition preFPathNode (t:FPathType)(d:derivation)(a:address) :=
+Definition preFPathNode t d n a :=
   match subderiv d a with
   | None       => False
-  | Some d'  => preFPath t d'
+  | Some d'  => preFPath t d' n
   end.
 
-Definition FPath (t:FPathType)(d:derivation)(a:address) : Prop := (Valid d) /\ (preFPathNode t d a). 
+Definition FPath t d n a : Prop := (Valid d) /\ (preFPathNode t d n a). 
 
 (** FInite Traces *)
 
 Definition FTraceType := list (formula*sequent).
 
-Inductive preFTrace : FTraceType -> derivation -> Prop :=
- | Leaf f s s' ls R: s = (oseq_forget s') -> In f s -> preFTrace [(f,s)] (ORule ls R s' []) 
- | ConsOne d t R ls s0 s s' f1 f2: 
-                          preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
+Inductive preFTrace : FTraceType -> derivation -> nat -> Prop :=
+ | Leaf f s s' ls n: s = (oseq_forget s') -> In f s -> preFTrace [(f,s)] (ORule ls (BackEdge n) s' []) n 
+ | ConsOne d t R ls s0 s s' f1 f2 n: 
+                          preFTrace ((f1,s0)::t) d n -> s' = oseq_forget s 
                           -> In f2 s' -> In f1 (FL f2) 
-                          -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d])
- | ConsLeft d d' t R ls s0 s s' f1 f2: 
-                          preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
+                          -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d]) n
+ | ConsLeft d d' t R ls s0 s s' f1 f2 n: 
+                          preFTrace ((f1,s0)::t) d n -> s' = oseq_forget s 
                           -> In f2 s' -> In f1 (FL f2) 
-                          -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d;d'])
- | ConsRight d d' t R ls s0 s s' f1 f2: 
-                          preFTrace ((f1,s0)::t) d -> s' = oseq_forget s 
+                          -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d;d']) n
+ | ConsRight d d' t R ls s0 s s' f1 f2 n: 
+                          preFTrace ((f1,s0)::t) d n -> s' = oseq_forget s 
                           -> In f2 s' -> In f1 (FL f2) 
-                          -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d';d])
+                          -> preFTrace ((f2,s')::(f1,s0)::t) (ORule ls R s [d';d]) n
                         .
 
-Definition preFTraceNode (t:FTraceType)(d:derivation)(a:address) :=
+Definition preFTraceNode t d n a :=
   match subderiv d a with
   | None       => False
-  | Some d'  => preFTrace t d'
+  | Some d'  => preFTrace t d' n
   end.
 
-Definition FTrace (t:FTraceType)(d:derivation)(a:address) : Prop := (Valid d) /\ (preFTraceNode t d a). 
+Definition FTrace t d n a : Prop := (Valid d) /\ (preFTraceNode t d n a). 
 
 
 (** Link between both*)
@@ -82,26 +78,11 @@ Definition FTrace_example: FTraceType :=
    (((ν (%0)⊕(%0)) ⊕ (ν (%0)⊕(%0))), ⊦ [((ν (%0)⊕(%0)) ⊕ (ν (%0)⊕(%0)))] );
    (ν (%0)⊕(%0), ⊦ [ν (%0)⊕(%0)] )].
 
-Lemma FTrace_example_lemma : FTrace FTrace_example oderiv_example' [].
+Lemma FTrace_example_lemma : FTrace FTrace_example oderiv_example' 2 [].
 Proof.
   split;
   repeat (constructor; simpl; intuition).
 Qed.
-
-(* 
-Lemma FTraceComp: forall f g T d a, (FTrace T d a) -> In f (map fst T) -> In g (map fst T) -> (f ≪ g) \/ (g ≪ f).
-Proof.
-   intros. destruct H. clear H.
-   unfold preFTraceNode in H2. destruct (subderiv d a); try contradiction.
-   induction H2.
-   - simpl in *; destruct H0; destruct H1; try contradiction; subst; left; apply FL_refl.
-   - simpl in H0; simpl in H1.
-      destruct H0.
-      -- destruct H1.
-        + subst; left; apply FL_refl.
-        + subst. 
-Admitted. *)
-
 
 
 
@@ -145,34 +126,19 @@ Qed.
 
 Local Open Scope eqb_scope.
 
-(** Access to the last rule used in [d] (following address [a] in [d]) *)
-
-Definition last_trace_rule (d:derivation)(a:address) : option rule_kind :=
-  match subderiv d a with
-  | None => None
-  | Some d' => let '(ORule ls R s ld) := d' in match ld with 
-                                                                   | [] => Some R
-                                                                   | _ => None
-                                                                   end
-  end.
-
-Compute last_trace_rule oderiv_example' [i;i].
-
 (** Linking condition between Stream's elements *)
 
 CoInductive Path: PathType -> derivation -> Prop := 
-  | PathCons p1 p2 n P d a1 a2: 
+  | PathCons p1 p2 n n' P d a1 a2: 
                                               Path (p2 ;; P) d
-                                              -> FPath p1 d a1 -> FPath p2 d a2 
-                                              -> last_trace_rule d a1 = Some (BackEdge n)
+                                              -> FPath p1 d n a1 -> FPath p2 d n' a2 
                                               -> npop n a1 = Some a2
                                               -> Path (p1 ;; p2 ;; P) d.
 
 CoInductive Trace: TraceType -> derivation -> Prop := 
-  | TraceCons t1 t2 n T d a1 a2: 
+  | TraceCons t1 t2 n n' T d a1 a2: 
                                               Trace (t2 ;; T) d
-                                              -> FTrace t1 d a1 -> FTrace t2 d a2 
-                                              -> last_trace_rule d a1 = Some (BackEdge n)
+                                              -> FTrace t1 d n a1 -> FTrace t2 d n' a2 
                                               -> npop n a1 = Some a2
                                               -> Trace (t1 ;; t2 ;; T) d.
 
@@ -188,7 +154,7 @@ Definition Inf (f:formula)(t:TraceType)(d:derivation): Prop := Trace t d /\ preI
 
 (** Minimum of Infinite Appearances *)
 
-Definition InfMin (f:formula)(T:TraceType)(d:derivation) : Prop := Inf f T d /\ (forall G, Inf G T d -> f ≪ G).
+Definition InfMin (f:formula)(T:TraceType)(d:derivation) : Prop := Inf f T d /\ (forall G, Inf G T d -> f ⧼ G).
 
 Lemma ExistsMin : forall t d, 
   exists f, InfMin f t d.
@@ -198,7 +164,8 @@ Admitted.
 Lemma UniqueMin : forall f1 f2 t d, 
   InfMin f1 t d -> InfMin f2 t d -> f1 = f2.
 Proof.
-Admitted.
+  intros; destruct H; destruct H0; apply subform_antisymmetric; try apply H1; try apply H2; assumption.
+Qed.
 
 (** Validity Criteria *)
 
@@ -218,10 +185,10 @@ Proof.
               rewrite Str_nth_ex; simpl; left; trivial.
     ++ intros; destruct H. unfold preInf in H0. pose proof (H0 0); destruct H1; destruct H1.
        rewrite Str_nth_ex in H2; simpl in H2; destruct H2.
-       +++ subst; apply FL_refl.
+       +++ subst; constructor.
        +++ destruct H2.
-        * subst. simpl. right; left; trivial.
-        * destruct H2; try contradiction; subst; apply FL_refl.
+        * subst. simpl. repeat constructor.
+        * destruct H2; try contradiction; subst; constructor.
   + reflexivity.
 Admitted.
 

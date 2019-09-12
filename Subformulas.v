@@ -1,12 +1,6 @@
-Require Import List.
-Import ListNotations.
-Require String.
-Require Import Eqdep_dec.
-Require Import Peano_dec.
-Require Import PeanoNat.
-Require Import Arith.
-Import Bool.
-Require Import Defs Debruijn Suboccurrences.
+Require Export Utils Suboccurrences.
+Import ListNotations Arith.
+
 Local Open Scope eqb_scope.
 
 (** DEFINITIONS *)
@@ -206,17 +200,27 @@ Proof.
   right ; intro ; apply subform_b_is_subform in H0 ; rewrite H in H0 ; apply diff_false_true in H0 ; contradiction.
 Qed.
 
+Lemma subform_size: forall G F, (F ⧼ G) -> (fsize F <= fsize G).
+Proof.
+  induction G; intros; 
+  try(inversion H; subst; reflexivity);
+  induction H; trivial; simpl in *; omega.
+Qed.
+
 Lemma subform_op_l: forall F1 F2 o, ~ (Op o F1 F2 ⧼ F1).
 Proof.
-Admitted.
+  intros; unfold not; intro; apply subform_size in H; simpl in H; omega.
+Qed.
 
 Lemma subform_op_r: forall F1 F2 o, ~ (Op o F1 F2 ⧼ F2).
 Proof.
-Admitted.
+  intros; unfold not; intro; apply subform_size in H; simpl in H; omega.
+Qed.
 
 Lemma subform_quant: forall F q, ~ (Quant q F ⧼ F).
 Proof.
-Admitted.
+  intros; unfold not; intro; apply subform_size in H; simpl in H; omega.
+Qed.
 
 Theorem subform_antisymmetric: Antisymmetric formula _ Subform.
 Proof.

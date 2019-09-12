@@ -1,9 +1,5 @@
-Require Import Utils Defs Debruijn Occurrences Address.
-Require Import StringUtils Datatypes.
-Require DecimalString.
-Import ListNotations.
-Require Import Arith.
-Import Bool.
+Require Export Occurrences.
+Import ListNotations Arith Bool.
 
 Local Open Scope form.
 
@@ -122,13 +118,13 @@ Definition valid_deriv_step '(ORule ls R s ld) :=
    | _, _ => false
    end.
 
-Fixpoint valid_deriv d :=
+Fixpoint pre_valid_deriv d :=
   valid_deriv_step d &&&
    (let '(ORule _ _ _ ld) := d in
-    List.forallb (valid_deriv) ld).
+    List.forallb (pre_valid_deriv) ld).
 
 
-
+Definition valid_deriv d := disjoint_listb (ocontext_addr (claim d)) &&& pre_valid_deriv d.
 
 
 (** Example *)
@@ -158,73 +154,73 @@ Compute valid_deriv oderiv_example.
 
 (** Inductive Validity *)
  
-Inductive Valid : derivation -> Prop :=
-  
+Inductive preValid : derivation -> Prop :=
  | V_Ax Γ A ls a a': In { dual A, a' } Γ
-                                -> Valid (ORule ls Ax (⊢ {A, a}::Γ) [])
+                                -> preValid (ORule ls Ax (⊢ {A, a}::Γ) [])
  | V_Tr Γ ls a: In {⊤, a} Γ 
-                       -> Valid (ORule ls TopR (⊢ Γ) [])
- | V_One ls a: Valid (ORule ls OneR (⊢ [{!, a}]) [])
- | V_Bot d Γ ls a: Valid d 
+                       -> preValid (ORule ls TopR (⊢ Γ) [])
+ | V_One ls a: preValid (ORule ls OneR (⊢ [{!, a}]) [])
+ | V_Bot d Γ ls a: preValid d 
                              -> Claim d (⊢Γ) 
                              -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{⊥, a}::Γ) :: lift ls)
-                             -> Valid (ORule ls BotR (⊢{⊥, a}::Γ) [d])
+                             -> preValid (ORule ls BotR (⊢{⊥, a}::Γ) [d])
  | V_Or_add_l d F G Γ a ls: 
-                            Valid d 
+                            preValid d 
                             -> Claim d (⊢{F,l::a}::Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{ F⊕G, a }::Γ) :: lift ls)
-                            -> Valid (ORule ls Or_add_l (⊢{ F⊕G, a }::Γ) [d])
+                            -> preValid (ORule ls Or_add_l (⊢{ F⊕G, a }::Γ) [d])
  | V_Or_add_r d F G Γ a ls  : 
-                            Valid d 
+                            preValid d 
                             -> Claim d (⊢{G,r::a}::Γ)
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{ F⊕G, a }::Γ) :: lift ls)
-                            -> Valid (ORule ls Or_add_r (⊢{ F⊕G, a }::Γ) [d])
+                            -> preValid (ORule ls Or_add_r (⊢{ F⊕G, a }::Γ) [d])
  | V_Or_mult d F G Γ a ls :
-                            Valid d 
+                            preValid d 
                             -> Claim d (⊢{ F, l::a } :: { G, r::a } :: Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢{ F#G, a }::Γ) :: lift ls)
-                            -> Valid (ORule ls Or_mult (⊢ { F#G, a}::Γ) [d])
+                            -> preValid (ORule ls Or_mult (⊢ { F#G, a}::Γ) [d])
  | V_And_add d1 d2 F G Γ a ls :
-                            Valid d1 -> Valid d2 
+                            preValid d1 -> preValid d2 
                             -> Claim d1 (⊢ { F, l::a }::Γ) -> Claim d2 (⊢ { G, r::a }::Γ) 
                             -> Backedges d1 (lift ls) \/ Backedges d1 ( (1, ⊢{ F&G, a }::Γ) :: lift ls)
                             -> Backedges d2 (lift ls) \/ Backedges d2 ( (1, ⊢{ F&G, a }::Γ) :: lift ls)
-                            -> Valid (ORule ls And_add (⊢ { F&G, a } :: Γ) [d1;d2])
+                            -> preValid (ORule ls And_add (⊢ { F&G, a } :: Γ) [d1;d2])
  | V_And_mult d1 d2 F G Γ1 Γ2 a ls :
-                            Valid d1 -> Valid d2 
+                            preValid d1 -> preValid d2 
                             -> Claim d1 (⊢ { F, l::a } :: Γ1) -> Claim d2 (⊢ { G, r::a } :: Γ2) 
                             -> Backedges d1 (lift ls) \/ Backedges d1 ( (1, ⊢ { F⊗G, a } :: (app Γ1 Γ2)) :: lift ls)
                             -> Backedges d2 (lift ls) \/ Backedges d2 ( (1, ⊢ { F⊗G, a } :: (app Γ1 Γ2)) :: lift ls)
-                            -> Valid (ORule ls And_mult (⊢ { F⊗G, a } :: (app Γ1 Γ2)) [d1;d2])
+                            -> preValid (ORule ls And_mult (⊢ { F⊗G, a } :: (app Γ1 Γ2)) [d1;d2])
  | V_Cut d1 d2 A Γ1 Γ2 ls a1 a2 :
-                            Valid d1 -> Valid d2 
+                            preValid d1 -> preValid d2 
                             -> Claim d1 (⊢ { A, a1}::Γ1) -> Claim d2 (⊢ { dual A, a2 }::Γ2) 
                             -> disjoint_addr_list a1 (ocontext_addr Γ1) -> disjoint_addr_list a2 (ocontext_addr Γ2)
                             -> Backedges d1 (lift ls) \/ Backedges d1 ( (1, ⊢app Γ1 Γ2) :: lift ls) 
                             -> Backedges d2 (lift ls) \/ Backedges d2 ( (1, ⊢app Γ1 Γ2) :: lift ls)
-                            -> Valid (ORule ls Cut (⊢app Γ1 Γ2) [d1;d2])
+                            -> preValid (ORule ls Cut (⊢app Γ1 Γ2) [d1;d2])
  | V_Ex d F G Γ1 Γ2 ls :
-                            Valid d 
+                            preValid d 
                             -> Claim d (⊢ app Γ1 (G::F::Γ2)) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢app Γ1 (F::G::Γ2)) :: lift ls)
-                            -> Valid (ORule ls Ex (⊢app Γ1 (F::G::Γ2)) [d])
+                            -> preValid (ORule ls Ex (⊢app Γ1 (F::G::Γ2)) [d])
  | V_Mu d F Γ ls a :
-                            Valid d 
+                            preValid d 
                             -> Claim d (⊢ { F[[ %0 := µ F ]], i::a }::Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢ { (µ F), a }::Γ) :: lift ls)
-                            -> Valid (ORule ls Mu (⊢ { (µ F), a }::Γ) [d])
+                            -> preValid (ORule ls Mu (⊢ { (µ F), a }::Γ) [d])
  | V_Nu d F Γ ls a :
-                            Valid d 
+                            preValid d 
                             -> Claim d (⊢ {F[[ %0 := ν F ]], i::a}::Γ) 
                             -> Backedges d (lift ls) \/ Backedges d ( (1, ⊢ { (ν F), a }::Γ) :: lift ls)
-                            -> Valid (ORule ls Nu (⊢ { (ν F), a }::Γ) [d])
+                            -> preValid (ORule ls Nu (⊢ { (ν F), a }::Γ) [d])
 
  | V_BackEdge ls s n: option_oseq_equiv (Some s) (list_assoc n ls)
-                                                -> Valid (ORule ls (BackEdge n) s [])
+                                                -> preValid (ORule ls (BackEdge n) s [])
  .
 
-Hint Constructors Valid.
+Hint Constructors preValid.
 
+Definition Valid (d:derivation) := disjoint_list (ocontext_addr (claim d)) /\ preValid d.
 (** Two Examples *)
 
 Definition oderiv_example' :=
@@ -250,7 +246,7 @@ ORule [] Nu (⊢ [{ (ν (%0)⊕(%0)), [] }])
 
 
 Theorem thm_oexample: 
-  Valid (oderiv_example').
+  preValid (oderiv_example').
 Proof.
   repeat (constructor; intuition).
 Qed.
@@ -274,6 +270,7 @@ ORule [] Cut (⊢ [{ F#(~F), [r] }])
 Theorem thm_cut_example (F:formula): 
   Valid (cut_example F).
 Proof.
+  constructor; simpl; try(split; trivial; unfold disjoint_addr_list; intros; inversion H);
   apply (V_Cut _ _  (F#(~F)) [] [{ F#(~F), [r] }] _ [l] [l]); repeat constructor; intuition.
   - eapply V_Ax; intuition.
   - eapply (V_Ex _ _ _ [] []); repeat constructor.
@@ -420,13 +417,13 @@ Local Open Scope list_scope.
 
 (** Boolea <-> Inductive *)
 
-Theorem valid_deriv_is_Valid: forall (d:derivation), 
-  valid_deriv d = true <-> Valid d.
+Theorem pre_valid_deriv_is_preValid: forall (d:derivation), 
+  pre_valid_deriv d = true <-> preValid d.
 Proof.
   split.
  - induction d as [ls r s ds IH] using derivation_ind'.
    cbn - [valid_deriv_step]. rewrite lazy_andb_iff. intros (H,H').
-   assert (IH' : Forall (fun d => Valid d) ds).
+   assert (IH' : Forall (fun d => preValid d) ds).
    { rewrite Forall_forall in *. rewrite forallb_forall in *. auto. }
    clear IH H'.
    cbn in *.
@@ -461,3 +458,25 @@ Proof.
      + rewrite lazy_orb_false; simpl in H; destruct (list_assoc n ls); 
         try contradiction; apply oseq_equiv_is_oseq_equivb; trivial.
 Qed.
+
+Theorem valid_deriv_is_Valid : forall d, valid_deriv d = true <-> Valid d.
+Proof.
+  unfold Valid, valid_deriv; split; intros.
+  - apply lazy_andb_iff in H; 
+    rewrite disjoint_list_is_disjoint_listb, <- pre_valid_deriv_is_preValid; trivial.
+  - apply lazy_andb_iff; 
+    rewrite disjoint_list_is_disjoint_listb, <- pre_valid_deriv_is_preValid in H; trivial.
+Qed.
+
+
+
+
+
+
+
+
+
+
+
+
+

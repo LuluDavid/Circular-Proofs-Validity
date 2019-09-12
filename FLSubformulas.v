@@ -1,10 +1,8 @@
-Require Import Arith.
-Require Export Setoid Morphisms RelationClasses Arith Omega Bool String MSetRBT StringOrder List Utils.
-Require DecimalString Permutation.
-Import ListNotations.
-Require Import Utils Defs Debruijn Occurrences Subformulas FLSuboccurrences.
+Require Export FLSuboccurrences.
+Import ListNotations RelationClasses Omega.
+
+
 Local Open Scope eqb_scope.
-Local Open Scope list_scope.
 Local Open Scope form.
 
 (** DEFINITIONS *)
@@ -103,8 +101,6 @@ Fixpoint noDupSubst (s:SubstType) : SubstType :=
 
 Definition getSubstSet (f:formula) := noDupSubst (getSubst f).
 
-Fixpoint InSubst (p:nat*formula) lp : bool := list_mem p lp.
-
 (** Example *)
 
 Local Open Scope string_scope.
@@ -143,9 +139,11 @@ Compute FLMin (FLSet exampleFL1).
 Compute FLMin (FLSet exampleFL2).
 
 
+(** Comparability *)
 
+Definition FLComp F G := (F ≪ G) \/ (G ≪ F).
 
-
+Definition FLCompList l := forall F G, In F l -> In G l -> FLComp F G.
 
 (** META *)
 
@@ -179,9 +177,28 @@ Proof.
     destruct H; try (left; assumption); right; apply IHl; assumption.
 Qed.
 
-Lemma InSubstForm_list_assoc: forall F l, InSubstForm F l <-> exists n, list_assoc n l = Some F.
+Lemma InSubstForm_In: forall F l, InSubstForm F l <-> exists n, In (n, F) l.
 Proof.
-Admitted.
+  split; induction l; intros; cbn in *; simpl in *.
+  - inversion H.
+  - destruct H.
+    + destruct a; simpl in *; subst; exists n; left; trivial.
+    + apply IHl in H; destruct H; exists x; right; trivial.
+  - destruct H; contradiction.
+  - do 2 (destruct H).
+    + left; subst; trivial.
+    + right; apply IHl; exists x; trivial.
+Qed.
+
+
+Lemma InSubstForm_list_assoc: forall l F, (exists n, list_assoc n l = Some F) -> InSubstForm F l.
+Proof.
+  induction l; intros; cbn in *; simpl in *.
+  - destruct H; discriminate H.
+  - destruct a; simpl in *; destruct H; destruct (x =? n).
+    + injection H as H; subst; left; trivial.
+    + right; apply IHl; exists x; trivial. 
+Qed.
 
 Lemma lenght_lift : forall s, length (↑ s) = length s.
 Proof.
@@ -214,7 +231,26 @@ Proof.
   unfold bsubst. simpl. rewrite Hloc. apply IHs.
 Qed.
 
+Lemma MSubst_app: forall l1 l2 f,
+  MSubst f (l1 ++ l2) = MSubst (MSubst f l1) l2.
+Proof.
+  induction l1; intros.
+  - auto.
+  - simpl; destruct a; apply IHl1.
+Qed.
+
 Local Open Scope nat_scope.
+
+Lemma level_MSubst_max : forall l F, 
+                        form_level (MSubst F l) <= Nat.max (form_level F) (list_max (map form_level (map snd l))).
+Proof.
+  assert (forall n, Nat.max n 0 = n). { destruct n; trivial. }
+  induction l; intros; simpl.
+  + unfold list_max; simpl; omega with *.
+  + destruct a; simpl. pose proof (le_level_BSubst F f n (form_level F)(form_level f)).
+     rewrite (Nat.max_comm (form_level f) _), Nat.max_assoc.
+     pose proof (IHl (F [[ % n := f]])). omega with *.
+Qed.
 
 Lemma le_level_MSubst_Cons : forall (G f: formula) l n, 
   form_level G <= n -> MSubst G ((n, f)::l) = MSubst G l.
@@ -308,25 +344,11 @@ Qed.
 
 Local Open Scope list_scope.
 
-Lemma preFL_FL: forall F G l, BClosed (MSubst F l) -> In G (preFL F l) -> (G ≪ MSubst F l) \/ InSubstForm G l.
-Proof.
-  assert (Hloc': forall F l, (exists n, list_assoc n l = Some F) <-> InSubstForm F l). admit.
-  intros. revert dependent G; revert dependent l.
-  induction F; intros; try destruct v;
-  try(destruct H; subst; try contradiction; left; rewrite BClosed_MSubst; 
-  unfold BClosed; trivial; try apply FL_refl; reflexivity).
-  - admit.
-  - admit.
-  - simpl in *. destruct H0.
-    + left; subst; apply FL_refl.
-    + admit.
-Admitted.
-
-
-
 Local Open Scope eqb_scope.
 
-Lemma FL_BClosed : forall F G l, BClosed (MSubst F l) -> ClosedMSubst l
+(* BClosed Conservation *)
+
+Lemma preFL_BClosed : forall F G l, BClosed (MSubst F l) -> ClosedMSubst l
                                                           -> In G (preFL F l) -> BClosed G.
 Proof.
   unfold ClosedMSubst; induction F; intros; try destruct v;
@@ -359,17 +381,61 @@ Proof.
                 apply H0; apply InSubstForm_lift; trivial.
 Qed.
 
+(* Not generalizable to level n: for instance, 
+      F = µ.(%1)#ø -> level F = 1, but In (%1) (FL F) and level (%1) = 2  *)
+
+Corollary FL_BClosed : forall F G, BClosed F -> (G ≪ F) -> BClosed G.
+Proof.
+    intros; apply (preFL_BClosed F G []); simpl; trivial; unfold ClosedMSubst; intros; inversion H2.
+Qed.
+
+(* No free variables appearing *)
+
+Corollary FL_FVars : forall F, BClosed F -> forall k, ~ In (% k)(FL F).
+Proof.
+  intros; unfold not; intros; apply (FL_BClosed F (% k)) in H; trivial; discriminate H.
+Qed.
+
 Lemma FL_Forget : forall F G, (F ⋘ G) -> occ_forget F ≪ occ_forget G.
 Proof.
 Admitted.
 
+(** FLComparable *)
 
-(** FLMin *)
+Lemma FLComp_Rev : forall F G, FLComp F G <-> FLComp G F.
+Proof.
+  intros; unfold FLComp; rewrite or_comm; reflexivity.
+Qed.
 
-Lemma FLMinExists: forall F, 
-  BClosed F -> exists G, FLMin (FL F) = Some G.
+Lemma FLComp_Comm : forall f1 f2 l1 l2, FLCompList (l1 ++ f1 :: f2 :: l2) = FLCompList (l1 ++ f2 :: f1 :: l2).
 Proof.
 Admitted.
+
+Lemma FLComp_Trans : forall F G H, FLComp F G -> FLComp G H -> FLComp F H.
+Proof.
+Admitted.
+
+Lemma FLComp_List l F: FLCompList l -> (exists G, In G l /\ FLComp F G) -> FLCompList (F::l).
+Proof.
+  unfold FLCompList. do 3 intro. do 2 destruct H0.
+  intros. simpl in *. destruct H2; destruct H3; subst; intuition; try (left; apply FL_refl).
+  + eapply FLComp_Trans; try eassumption; apply H; trivial.
+  + apply FLComp_Rev; apply (FLComp_Trans _ x _); trivial; apply H; trivial.
+Qed.
+
+Lemma FLComp_List_Bis l F: FLCompList (F::l) -> FLCompList l.
+Proof.
+  unfold FLCompList; intros;
+  apply H; simpl; right; trivial.
+Qed.
+
+
+
+
+
+
+
+
 
 
 

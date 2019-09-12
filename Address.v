@@ -93,10 +93,6 @@ Compute disjointb address1 address2.
 Definition disjoint_lists (l1 l2:list address) : Prop  := forall (a1 a2: address),
   In a1 l1 -> In a2 l2 -> disjoint a1 a2.
 
-Inductive disjoint_list : list address -> Prop :=
- | DEmpty: disjoint_list []
- | DCons(a:address)(l:list address): (forall a', In a' l -> disjoint a a') -> disjoint_list (a::l).
-
 Definition disjoint_addr_list (a:address)(l:list address) : Prop := forall (a':address),
   In a' l -> disjoint a a'.
 
@@ -106,6 +102,17 @@ Fixpoint disjoint_addr_listb (a:address)(l:list address) : bool :=
   | a'::l' => disjointb a a' &&& disjoint_addr_listb a l'
   end.
 
+Fixpoint disjoint_list (l:list address) : Prop := 
+  match l with
+  | [] => True
+  | a::l' => disjoint_addr_list a l' /\ disjoint_list l'
+  end.
+  
+Fixpoint disjoint_listb (l:list address): bool :=
+  match l with
+  | [] => true
+  | a::l' => disjoint_addr_listb a l' &&& disjoint_listb l'
+  end.
 
 
 
@@ -121,9 +128,6 @@ Fixpoint disjoint_addr_listb (a:address)(l:list address) : bool :=
 Compute (map (@length allowed_chars) [[l;r;i];[];[l]]).
 
 Definition max_length (l: list address) : nat := list_max (map (@length allowed_chars) l).
- 
-Print filter.
-Print length.
 
 Definition max_length_subset (l: list address) : list address :=
   let M := (max_length l) in 
@@ -340,3 +344,19 @@ Proof.
       + subst; apply disjoint_is_disjointb in H; assumption.
       +  apply IH; assumption.
 Qed.
+
+(** One list of addresses *)
+
+Lemma disjoint_list_is_disjoint_listb : forall (l: list address), disjoint_list l <-> disjoint_listb l = true.
+Proof.
+  split; intros; induction l0; simpl in *; trivial; 
+  rewrite ?lazy_andb_iff, ?disjoint_addr_list_is_disjoint_addr_listb in *; destruct H; split; trivial;
+  apply IHl0; trivial.
+Qed.
+
+
+
+
+
+
+

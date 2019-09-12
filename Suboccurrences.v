@@ -1,12 +1,5 @@
-Require Import Defs.
-Require Import Wf.
-Require Import StringUtils.
-Require DecimalString.
+Require Export Occurrences.
 Import ListNotations.
-Require Import Arith.
-Import Bool.
-Require Import Defs Debruijn Occurrences Address Utils.
-
 Local Open Scope eqb_scope.
 
 (** DEFINITIONS *)

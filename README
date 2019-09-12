@@ -8,6 +8,8 @@ https://gitlab.math.univ-paris-diderot.fr/letouzey/natded
 
 https://github.com/olaure01/yalla/releases/tag/v2.0 (yalla 2.0) 
 
+[* Only remaining lemmas are in FL-Subformulas.v, Traces.v and AltTraces.v *]
+
 This implementation of Linear Logic is focused on proving the decidability of the validity
 criteria for circular proofs. That is why : 
 

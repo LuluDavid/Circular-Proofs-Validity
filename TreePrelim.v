@@ -1,10 +1,6 @@
-Require Import Defs.
-Require Import StringUtils.
-Require DecimalString.
-Import ListNotations.
-Require Import Arith.
-Import Bool.
-Require Import Defs Debruijn Occurrences Suboccurrences Address.
+Require Export Suboccurrences.
+Import ListNotations Arith Bool.
+
 Local Open Scope eqb_scope.
 
 (** STRUCTURE *)

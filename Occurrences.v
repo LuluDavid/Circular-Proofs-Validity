@@ -1,6 +1,6 @@
-Require Export Defs Debruijn Address StringUtils Utils Ascii.
+Require Export Debruijn Address Utils.
 Require DecimalString.
-Import ListNotations.
+Import ListNotations Ascii.
 Require Import Arith.
 Import Bool.
 Local Open Scope form.
@@ -311,7 +311,10 @@ Proof.
   red.
   fix IH 1. induction x; destruct y; cbn; 
   do 3 (case eqbspec; try cons; intros); subst.
-Admitted.
+  change (list_forallb2 Utils.eqb l0 l2) with (l0 =? l2).
+  change (EqbSpec derivation) in IH.
+  case eqbspec; cons.
+Qed.
 
 (** Dual *)
 
