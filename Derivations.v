@@ -11,7 +11,7 @@ Fixpoint subderiv (d:derivation)(a:address): option derivation :=
   let '(ORule ls R s ld) := d in
   match a, ld with
   | [], _               => Some d
-  | i::a', [d']        => subderiv d' a'  
+  | i::a', [d']        => subderiv d' a'
   | l::a', [d1;d2] => subderiv d1 a'
   | r::a', [d1;d2] => subderiv d2 a'
   | _, _ => None

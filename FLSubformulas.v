@@ -304,6 +304,7 @@ Qed.
 
 (** FL-Subformulas *)
 
+
 Lemma FL_refl: forall f, f ≪ f.
 Proof.
   induction f; simpl; try destruct v; try (left; reflexivity).
