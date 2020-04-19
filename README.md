@@ -45,7 +45,6 @@ About the structure of the code :
 - FL-Subformulas.v defines the Fisher-Ladner Subformulas of a formula
 - Traces.v introduces the traces directly as streams of consecutive formulas, and contains
   the validity criteria.
-- AltTraces.v introduces traces as functions, which seems more handy for most proofs here
 
 Auxiliary Files :
 AsciiOrder.v, StringOrder.v, StringUtils.v, Utils.v provide classic useful functions on
