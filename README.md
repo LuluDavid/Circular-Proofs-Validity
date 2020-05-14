@@ -28,7 +28,7 @@ criteria for circular proof, that is why:
 
 1. **FIXED POINTS:** the exponentials ! and ? are here replaced by fixed points 
    (µ/$: least fixed point, v/€ greatest fixed point).
-2. VARS: we only work with positive second order vars, which means they're invariant by dual.
+2. **VARS:** we only work with positive second order vars, which means they're invariant by dual.
 3. **RENAMING:** for each rule, it is possible to do the same job keeping the current sequent as a 
    further backedgeable sequent once the rule is applied.
 4. **BACKEDGING:** the backedge rule is introduced as an axiomatic rule: if the current sequent is 
