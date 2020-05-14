@@ -24,7 +24,7 @@ https://github.com/olaure01/yalla/releases/tag/v2.0 (yalla 2.0)
 ## Which logic background ?
 
 This implementation of Linear Logic is focused on proving the decidability of the validity
-criteria for circular proofs. That is why : 
+criteria for circular proof, that is why:
 
 1. **FIXED POINTS:** the exponentials ! and ? are here replaced by fixed points 
    (µ/$: least fixed point, v/€ greatest fixed point).
