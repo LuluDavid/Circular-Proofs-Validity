@@ -1,15 +1,18 @@
 # CircularProofsValidity
-A Formalization attempt of the Decidability of Circular Proof Validity
+A Formalization attempt of the **Decidability of Circular Proof Validity**
 
 ## Which goal ?
 
 The goal is to prove a result from Amina DOUMANE's thesis on infinite proofs, more specifically on
-circular proofs, which are infinite repetitions of the same application of rules (to simplify).
+circular proofs, which are *infinite repetitions of the same application of rules* to prove a formula
+in µMALL.
+
 To make it short, if you take a sample of linear logic and replace the exponentials (? and !) with
 fixed points (greatest fixed point and smallest fixed point), you obtain a logic where you can
 allow infinite proofs (and thus circular proofs), but only if you decide of some validity criteria
-to limit the logic's expressivity. Thus, there exists a validity criteria on circular proofs, which
-is detailed in <a href="http://theses.md.univ-paris-diderot.fr/DOUMANE_Amina_2_va_20170627.pdf">this document</a>
+to **limit the logic's expressivity**. 
+
+Thus, there exists a validity criteria on circular proofs, which is detailed in <a href="http://theses.md.univ-paris-diderot.fr/DOUMANE_Amina_2_va_20170627.pdf">this document</a>
 (I might upload a summary later on).
 
 ## Inspirations
@@ -21,7 +24,7 @@ https://gitlab.math.univ-paris-diderot.fr/letouzey/natded
 
 https://github.com/olaure01/yalla/releases/tag/v2.0 (yalla 2.0) 
 
-## Which logic background ?
+## Which logical background ?
 
 This implementation of Linear Logic is focused on proving the decidability of the validity
 criteria for circular proof, that is why:
@@ -35,7 +38,7 @@ criteria for circular proof, that is why:
    s and s's formulas appear striclty in one backedgeable sequents, then the current sequent 
    is proved.
 5. **Locally Nameless Encoding:** the vars are seen as bounded debruijn variables or free named 
-   variables, thus its "freedom" is deeply encoded here
+   variables, thus a variable's "freedom" is deeply encoded here
 
 We will introduce then a second notion of validity, which is the "real" validity criteria,
 and once this is done, a side-implementation of omega-automaton will help us demonstrate the 
