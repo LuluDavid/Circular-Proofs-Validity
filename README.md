@@ -24,6 +24,11 @@ https://gitlab.math.univ-paris-diderot.fr/letouzey/natded
 
 https://github.com/olaure01/yalla/releases/tag/v2.0 (yalla 2.0) 
 
+Here is the dependency graph for clearer understanding :
+
+
+<p align="center"><img height = 700 src="https://github.com/LuluDavid/Circular-Proofs-Validity/blob/master/dependency_graph.png"></p>
+
 ## Which logical background ?
 
 This implementation of Linear Logic is focused on proving the decidability of the validity
