@@ -35,5 +35,5 @@ nlia.cache
 nra.cache
 # vscoq
 .vscode/*
-
+./Users/luciendavid/Desktop/Circular-Proofs-Validity/coqgraph.sh
 # End of https://www.gitignore.io/api/coq
