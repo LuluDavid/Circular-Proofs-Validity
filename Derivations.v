@@ -297,23 +297,21 @@ Fixpoint print_list_oseq (ls:list (nat*osequent)) :=
   | (n, s)::ls => (print_oseq s)
   end.
 
-Local Open Scope string_scope.
-
 Fixpoint print_oderiv_list (d:derivation): list string :=
   let '(ORule ls R s ds) := d in
   concat (map print_oderiv_list ds) ++ 
   [string_mult "-" (String.length (print_list_oseq ls ++ print_oseq s)) ++ print_rule R; 
   print_list_oseq ls ++ print_oseq s].
 
-Fixpoint print_list_string (l:list string): string :=
+(*Fixpoint print_list_string (l:list string): string :=
   match l with
   | [] => ""
-  | s::ls => s++(String "010" (print_list_string ls))
+  | s::ls => s++(String ("010") (print_list_string ls))
   end.
-  
+
 Definition print_oderiv (d:derivation) : string := print_list_string (print_oderiv_list d).
 
-Compute print_list_string (print_oderiv_list oderiv_example').
+Compute print_list_string (print_oderiv_list oderiv_example'). *)
 
 
 

@@ -471,7 +471,7 @@ Proof.
   - destruct (n0 =? n) eqn:Heq.
     + assumption.
     + cbn in *. inversion H; subst.
-       -- apply eqb_neq in Heq; destruct Heq; trivial.
+       -- apply Utils.eqb_neq in Heq; destruct Heq; trivial.
        -- assumption.
   - cbn in H; simpl in H; apply max_le in H; destruct H; apply max_le; split.
     + apply IHf1; assumption.
@@ -485,7 +485,7 @@ Lemma le_level_BSubst_unchanged : forall (G f: formula) n,
   form_level G <= n -> G[[ %n := f ]] = G.
 Proof.
   induction G; intros; try destruct v; try (inversion H0; reflexivity); cbn; simpl; trivial.
- - destruct (n0 =? n) eqn:Heq; try apply eqb_eq in Heq; subst; trivial; simpl in H;
+ - destruct (n0 =? n) eqn:Heq; try apply Utils.eqb_eq in Heq; subst; trivial; simpl in H;
     omega with *.
  -  apply max_le in H; destruct H;
     try (rewrite (IHG1 _ n));
@@ -541,10 +541,10 @@ Lemma switch_BSubst : forall (F G H:formula) a b,
 Proof.
   induction F; try destruct v; unfold bsubst; simpl; intros; trivial.
   - destruct (n =? a) eqn:Heqa; destruct (n =? b) eqn:Heqb; 
-    try rewrite eqb_eq in Heqa; try rewrite eqb_eq in Heqb.
+    try rewrite Utils.eqb_eq in Heqa; try rewrite Utils.eqb_eq in Heqb.
     + subst; destruct H2; trivial.
-    + subst; simpl; rewrite eqb_refl; apply BClosed_bsubst; trivial.
-    + subst; simpl; rewrite eqb_refl; symmetry; apply BClosed_bsubst; trivial.
+    + subst; simpl; rewrite Utils.eqb_refl; apply BClosed_bsubst; trivial.
+    + subst; simpl; rewrite Utils.eqb_refl; symmetry; apply BClosed_bsubst; trivial.
     + subst; simpl; rewrite Heqa, Heqb; trivial.
   - rewrite IHF1, IHF2; trivial.
   - rewrite IHF; intuition.
