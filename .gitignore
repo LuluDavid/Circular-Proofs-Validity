@@ -21,6 +21,9 @@
 *.v.d
 *.vio
 *.vo
+*.vos
+*.glob
+*.vok
 *.conf
 .coq-native/
 .csdp.cache
@@ -36,4 +39,6 @@ nra.cache
 # vscoq
 .vscode/*
 coqgraph.sh
+.coqdeps.d
+.Makefile.d
 # End of https://www.gitignore.io/api/coq
