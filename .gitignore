@@ -39,6 +39,6 @@ nra.cache
 # vscoq
 .vscode/*
 coqgraph.sh
-.coqdeps.d
-.Makefile.d
+theories/.coqdeps.d
+theories/.Makefile.d
 # End of https://www.gitignore.io/api/coq
