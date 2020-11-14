@@ -1,4 +1,4 @@
-Require Export Morphisms RelationClasses Arith Omega Bool String
+Require Export Morphisms RelationClasses Arith Bool String
                MSetRBT StringOrder List Utils.
 Require DecimalString.
 Import ListNotations.

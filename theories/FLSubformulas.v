@@ -1,5 +1,5 @@
 Require Export FLSuboccurrences.
-Import ListNotations RelationClasses Omega.
+Import ListNotations RelationClasses.
 
 
 Local Open Scope eqb_scope.
@@ -246,10 +246,10 @@ Lemma level_MSubst_max : forall l F,
 Proof.
   assert (forall n, Nat.max n 0 = n). { destruct n; trivial. }
   induction l; intros; simpl.
-  + unfold list_max; simpl; omega with *.
+  + unfold list_max; simpl; lia.
   + destruct a; simpl. pose proof (le_level_BSubst F f n (form_level F)(form_level f)).
      rewrite (Nat.max_comm (form_level f) _), Nat.max_assoc.
-     pose proof (IHl (F [[ % n := f]])). omega with *.
+     pose proof (IHl (F [[ % n := f]])). lia.
 Qed.
 
 Lemma le_level_MSubst_Cons : forall (G f: formula) l n, 

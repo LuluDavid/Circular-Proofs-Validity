@@ -204,22 +204,22 @@ Lemma subform_size: forall G F, (F ⧼ G) -> (fsize F <= fsize G).
 Proof.
   induction G; intros; 
   try(inversion H; subst; reflexivity);
-  induction H; trivial; simpl in *; omega.
+  induction H; trivial; simpl in *; lia.
 Qed.
 
 Lemma subform_op_l: forall F1 F2 o, ~ (Op o F1 F2 ⧼ F1).
 Proof.
-  intros; unfold not; intro; apply subform_size in H; simpl in H; omega.
+  intros; unfold not; intro; apply subform_size in H; simpl in H; lia.
 Qed.
 
 Lemma subform_op_r: forall F1 F2 o, ~ (Op o F1 F2 ⧼ F2).
 Proof.
-  intros; unfold not; intro; apply subform_size in H; simpl in H; omega.
+  intros; unfold not; intro; apply subform_size in H; simpl in H; lia.
 Qed.
 
 Lemma subform_quant: forall F q, ~ (Quant q F ⧼ F).
 Proof.
-  intros; unfold not; intro; apply subform_size in H; simpl in H; omega.
+  intros; unfold not; intro; apply subform_size in H; simpl in H; lia.
 Qed.
 
 Theorem subform_antisymmetric: Antisymmetric formula _ Subform.

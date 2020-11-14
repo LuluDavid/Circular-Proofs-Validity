@@ -1,4 +1,4 @@
-Require Export StringUtils Defs.
+Require Export StringUtils Defs Lia.
 Import ListNotations Ascii.
 Local Open Scope bool_scope.
 Local Open Scope lazy_bool_scope.
@@ -485,8 +485,7 @@ Lemma le_level_BSubst_unchanged : forall (G f: formula) n,
   form_level G <= n -> G[[ %n := f ]] = G.
 Proof.
   induction G; intros; try destruct v; try (inversion H0; reflexivity); cbn; simpl; trivial.
- - destruct (n0 =? n) eqn:Heq; try apply Utils.eqb_eq in Heq; subst; trivial; simpl in H;
-    omega with *.
+ - destruct (n0 =? n) eqn:Heq; try apply Utils.eqb_eq in Heq; subst; trivial; simpl in H; lia.
  -  apply max_le in H; destruct H;
     try (rewrite (IHG1 _ n));
     try (rewrite (IHG2 _ n)); try assumption;

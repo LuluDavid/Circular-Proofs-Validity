@@ -4,7 +4,7 @@
 (** The NatDed development, Pierre Letouzey, 2019.
     This file is released under the CC0 License, see the LICENSE file *)
 
-Require Import Bool Arith Omega Ascii String AsciiOrder StringOrder List.
+Require Import Bool Arith Lia Ascii String AsciiOrder StringOrder List.
 Import ListNotations.
 Open Scope lazy_bool_scope.
 Add Search Blacklist "OrdersEx.Nat_as".
@@ -443,17 +443,17 @@ Qed.
 
 Lemma le_max: forall n m, n <= Nat.max n m /\ m <= Nat.max n m.
 Proof.
-   intros; omega with *.
+   intros; lia.
 Qed.
 
 Lemma le_max_bis: forall n m, Nat.max n m <= n \/ Nat.max n m <= m.
 Proof.
-  intros; omega with *.
+  intros; lia.
 Qed.
   
 Lemma max_le n m p : Nat.max n m <= p <-> n <= p /\ m <= p.
 Proof.
- omega with *.
+ lia.
 Qed.
 
 Lemma max_eq n m p : Nat.max n m = p -> n = p \/ m = p.
@@ -470,17 +470,17 @@ Qed.
 
 Lemma max_lt n m p : Nat.max n m < p <-> n < p /\ m < p.
 Proof.
- omega with *.
+ lia.
 Qed.
 
 Lemma max_0 n m : Nat.max n m = 0 <-> n=0 /\ m=0.
 Proof.
- omega with *.
+ lia.
 Qed.
 
 Lemma le_pred_S : forall n m, Nat.pred n <= m <-> n <= S m.
 Proof.
-  intros; omega with *.
+  intros; lia.
 Qed.
 
 Lemma eq_pred_S : forall n m, Nat.pred n = m -> n <= S m.
@@ -502,13 +502,13 @@ Qed.
 Lemma max_mono a a' b b' :
  a <= a' -> b <= b' -> Nat.max a b <= Nat.max a' b'.
 Proof.
- omega with *.
+ lia.
 Qed.
 
 Lemma list_max_le l p :
  list_max l <= p <-> (forall n, In n l -> n <= p).
 Proof.
- induction l; simpl; rewrite ?max_le in *; intuition.
+ induction l; simpl; rewrite ?max_le in *; intuition; lia.
 Qed.
 
 (** /!\ The other direction is only true for non-empty lists *)
@@ -516,13 +516,13 @@ Qed.
 Lemma list_max_lt l p :
  list_max l < p -> (forall n, In n l -> n < p).
 Proof.
- induction l; simpl; rewrite ?max_lt in *; intuition.
+ induction l; simpl; rewrite ?max_lt in *; intuition; lia.
 Qed.
 
 Lemma list_max_0 l :
  list_max l = 0 <-> forall n, In n l -> n = 0.
 Proof.
- induction l; simpl; rewrite ?max_0 in *; intuition.
+ induction l; simpl; rewrite ?max_0 in *; intuition; lia.
 Qed.
 
 Lemma list_max_map_le {A} (f:A->nat) l p :
