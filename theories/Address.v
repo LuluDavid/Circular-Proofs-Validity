@@ -134,8 +134,8 @@ Definition max_length_subset (l: list address) : list address :=
   filter (fun (a:address) => (@length allowed_chars a) =? M) l.
 
 Compute max_length_subset [[l;r;i];[];[l]].
-  
-Fixpoint fresh_address (la: list address) : address :=
+
+Definition fresh_address (la: list address) : address :=
   match (max_length_subset la) with
   | [] => []
   | a :: la' => match a with

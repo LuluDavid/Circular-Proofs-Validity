@@ -9,72 +9,46 @@ Local Open Scope eqb_scope.
 
 (** Variables *)
 
-Inductive V :=
-  | FVar : variable -> V (** Free 2nd Order Variable (global name) *)
-  | BVar : nat -> V (** Bounded 2nd Order variable (de Bruijn indices) *)
-  .
-
-Instance V_eqb : Eqb V :=
- fix v_eqb V1 V2 :=
-  match V1, V2 with
-  | FVar v1, FVar v2 => v1 =? v2
-  | BVar n1, BVar n2 => n1 =? n2
-  | _, _ => false
-  end.
-
-Delimit Scope V_scope with V.
-Bind Scope V_scope with V.
-
-
-
-
+Definition Atom := nat.
 
 (** Formulas *)
 
 Inductive formula :=
-  | Top
-  | Bot
-  | One
-  | Zero
-  | Var: V -> formula
-  | Op : op -> formula -> formula -> formula
-  | Quant : quant -> formula -> formula.
+| Top
+| Bot
+| One
+| Zero
+| Var: Atom -> formula
+| Op : op -> formula -> formula -> formula
+| Quant : quant -> Atom -> formula -> formula.
+
 
 Fixpoint fsize (F : formula) := match F with
 | Var _ => 1
 | Zero | One | Top | Bot => 1
 | Op _ G H => S ((fsize G) + (fsize H))
-| Quant _ G => S (fsize G)
+| Quant _ _ G => S (fsize G)
 end.
 
-Delimit Scope formula_scope with form.
-Bind Scope formula_scope with formula.
+Declare Scope formula_scope.
 
-Notation "⊥" := Bot.
-Notation "⊤" := Top.
-Notation "!" := One.
-Notation "'ø'" := Zero.
+Notation "⊥" := Bot : formula_scope.
+Notation "⊤" := Top : formula_scope.
+Notation "!" := One : formula_scope.
+Notation "'ø'" := Zero : formula_scope.
 Infix "⊕" := (Op Or_add) (at level 85, right associativity) : formula_scope.
 Infix "#" := (Op Or_mult) (at level 85, right associativity) : formula_scope.
 Infix "&" := (Op And_add) (at level 85, right associativity) : formula_scope.
 Infix "⊗" := (Op And_mult) (at level 85, right associativity) : formula_scope.
 
-Notation "// V" := (Var (FVar V)) (at level 20) : formula_scope.
-Notation "% n" := (Var (BVar n)) (at level 20) : formula_scope.
+Notation "% n" := (Var n) (at level 20) : formula_scope.
 
-Notation "'µ' A " := (Quant mu A)
- (at level 200, right associativity) : formula_scope.
-Notation "'ν' A" := (Quant nu A)
- (at level 200, right associativity) : formula_scope.
+Notation "'µ'" := (Quant mu) (at level 200) : formula_scope.
 
-Local Open Scope form.
+Notation "'ν'" := (Quant nu) (at level 200) : formula_scope.
 
-Definition NuFormula (f:formula) : Prop :=
-  match f with
-  | (ν _) => True
-  | _ => False
-  end.
-
+Local Open Scope formula_scope.
+Definition test := µ O Bot.
 
 (** Neutral [formula] *)
 
@@ -83,13 +57,6 @@ Definition neutral (f:formula) : Prop := In f [ ⊥ ; ⊤ ; ! ; ø ].
 (** Atomic [formula] *)
 Inductive atomic : formula -> Prop :=
 | atomic_var : forall x, atomic (Var x).
-
-
-Definition Naturals:formula := (µ (!⊕(%0))).
-
-
-
-
 
 (** Dual *)
 
@@ -103,14 +70,11 @@ Fixpoint dual (F : formula) : formula := match F with
 | Op Or_mult G H => Op And_mult (dual G) (dual H)
 | Op And_add G H => Op Or_add (dual G) (dual H)
 | Op And_mult G H => Op Or_mult (dual G) (dual H)
-| Quant mu G => Quant nu (dual G)
-| Quant nu G => Quant mu (dual G)
+| Quant mu X G => Quant nu X (dual G)
+| Quant nu X G => Quant mu X (dual G)
 end.
 
 Notation "~ F" := (dual F) (at level 75, right associativity).
-
-
-Definition NaturalsDual := dual Naturals.
 
 
 
@@ -120,20 +84,16 @@ Definition NaturalsDual := dual Naturals.
     with instances for variables, formulas, context, sequent, ... **)
 
 (** Replace a bound variable with a formula, useful for unfolding **)
-Class BSubst (A : Type) := bsubst : nat -> formula -> A -> A.
+Class BSubst (A : Type) := bsubst : Atom -> formula -> A -> A.
 Arguments bsubst {_} {_} _ _ !_.
 
 (** Level : succ of max bounded variable *)
 Class Level (A : Type) := level : A -> nat.
 Arguments level {_} {_} !_.
 
-Hint Unfold BSubst Level.
-
 (** Some generic definitions based on the previous ones *)
 
 Definition BClosed {A}`{Level A} (a:A) := level a = 0.
-
-Hint Unfold BClosed.
 
 Notation "f [[ % n := F ]]" := (bsubst n F f) (at level 150, right associativity) : formula_scope.
 
@@ -146,7 +106,7 @@ Instance bsubst_list {A}`{BSubst A} : BSubst (list A) :=
 
 Instance level_list {A}`{Level A} : Level (list A) :=
  fun l => list_max (List.map level l).
- 
+
 Instance bsubst_pair {A B}`{BSubst A}`{BSubst B} : BSubst (A*B) :=
  fun n t '(a,b) => (bsubst n t a, bsubst n t b).
 
@@ -154,63 +114,35 @@ Instance level_pair {A B}`{Level A}`{Level B} : Level (A*B) :=
  fun '(a,b) => Nat.max (level a) (level b).
 
 
-
-
-
-
-
-(** Vars Instances *)
-
-Instance V_level : Level V :=
- fix V_level v :=
- match v with
- | BVar n => S n
- | FVar v' => 0
- end.
-
-Definition V_bsubst (n:nat)(u:formula)(v:V): formula :=
-  match v with
-  | FVar v' => Var v
-  | BVar k => if (k =? n) then u else (Var v)
-  end.
- 
-
 Fixpoint print_formula (f:formula) :=
   match f with
   | Bot => "⊥"
   | Top => "⊤"
   | One => "1"
   | Zero => "0"
-  | (% n)%form => "%" ++ (String (ascii_of_nat (48 + n)) "")
-  | (// V)%form => V
+  | % n => "%" ++ (String (ascii_of_nat (48 + n)) "")
   | Op o f f' =>
     "{ " ++ print_formula f ++ " }" ++ pr_op o ++ "{ " ++ print_formula f' ++ " }"
-  | Quant q f => pr_quant q ++ "{ " ++ print_formula f ++ " }"
+  | Quant q n f => pr_quant q ++ "%" ++ (String (ascii_of_nat (48 + n)) "") ++ "{ " ++ print_formula f ++ " }"
   end.
-
-Compute print_formula (Naturals).
-Compute print_formula (NaturalsDual).
-
-
-
-
-
 
 (** Formula Instances *)
 
 (** A formula level is the maximum number of missings binders for a binded variable.
     It means that for a formula F, you need at least level F binders to close the formula. *)
-  
-Instance form_level : Level formula :=
-  fix form_level (f:formula) :=
+
+Fixpoint form_level_rec(f:formula)(l:@list nat) :=
   match f with
   | Top | Bot | One | Zero => 0
-  | Var X  => V_level X 
-  | Op _ f1 f2 => Nat.max (form_level f1) (form_level f2)
-  | Quant _ f' => Nat.pred (form_level f')
+  | Var n  => if list_mem n l then 0 else 1
+  | Op _ f1 f2 => Nat.max (form_level_rec f1 l) (form_level_rec f2 l)
+  | Quant _ n f' => form_level_rec f' (n::l)
   end.
 
-Compute form_level (µ((% 0)&(!#(% 0))))%form.
+Instance form_level : Level formula := fun f => form_level_rec f [].
+
+Compute form_level (µ 0 ((% 0)&(!#(% 0)))).
+Compute form_level (µ 1 ((% 0)&(!#(% 0)))).
 
 (** Important note : [bsubst] below is only intended to be
     used with a replacement formula [f] which is closed *)
@@ -219,36 +151,32 @@ Instance form_bsubst : BSubst formula :=
  fix form_bsubst n F f :=
  match f with
   | Top | Bot | One | Zero  => f
-  | Var V =>  V_bsubst n F V
+  | Var m =>  if (n =? m) then F else f
   | Op o f1 f2 => Op o (form_bsubst n F f1) (form_bsubst n F f2)
-  | Quant q f' => Quant q (form_bsubst (S n) F f')
+  | Quant q m f' => Quant q m (form_bsubst n F f')
  end.
 
-Definition example1: formula := µ (%1 # (ν %1 & %0)).
-Definition example2:formula := example1[[ %0 := //"A" ]].
-Compute example1.
+Definition example1: formula := µ 0 (%0 # (ν 1 (%0 & %1))).
+Definition example2:formula := example1[[ %0 := Bot ]].
 Compute example2.
 
 Instance form_eqb : Eqb formula :=
  fix form_eqb f1 f2 :=
   match f1, f2 with
   | Top, Top | Bot, Bot | One, One | Zero, Zero=> true
-  | Var X, Var Y => (X =? Y)%V 
+  | Var X, Var Y => X =? Y
   | Op o1 f1 f1', Op o2 f2 f2' =>
     (o1 =? o2) &&&
     form_eqb f1 f2 &&&
     form_eqb f1' f2'
-  | Quant q1 f1', Quant q2 f2' =>
-    (q1 =? q2) &&& form_eqb f1' f2'
+  | Quant n1 q1 f1', Quant n2 q2 f2' =>
+    (n1 =? n2) &&& (q1 =? q2) &&& form_eqb f1' f2'
   | _,_ => false
   end.
 
-(* Difference between bounded and free variables *)
+(* We could say they are equivalent, but is it the goal of eqb ? *)
 
-Compute    (µ((% 0)&(!#(% 0))))%form 
-                                   =?
-                   (µ((// "V")&(!#(// "V"))))%form.
-
+Compute µ 0 ((% 0)&(!#(% 0))) =? µ 1 ((% 1)&(!#(% 1))).
 
 
 
@@ -287,27 +215,7 @@ Instance level_seq : Level sequent :=
 Instance seq_eqb : Eqb sequent :=
  fun '(⊦ Γ1) '(⊦ Γ2) => (Γ1 =? Γ2).
 
-Definition ctx_example : context := [(µ((% 0)&(!#(% 0)))); (ν(µ((% 1)&(!#(% 0)))))].
-
-(** Number of binders in a formula *)
-
-Fixpoint FixBinders (f:formula) :=
-  match f with
-  | Quant _ G => S (FixBinders G)
-  | Op _ F1 F2 => Nat.max (FixBinders F1) (FixBinders F2)
-  | _ => 0
-  end.
-
-Inductive IndBinders: formula -> nat -> Prop :=
-  | NulBot: IndBinders ⊥ 0
-  | NulTop: IndBinders ⊤ 0
-  | NulZero: IndBinders ø 0
-  | NulOne: IndBinders ! 0
-  | NulVar v: IndBinders (Var v) 0
-  | CaseOp F1 F2 n1 n2 n o: IndBinders F1 n1 -> IndBinders F2 n2 
-                                            -> n = Nat.max n1 n2 -> IndBinders (Op o F1 F2) n
-  | Binding F q n: IndBinders F n -> IndBinders (Quant q F) (S n)
-  .
+Definition ctx_example : context := [(µ 0 ((% 0)&(!#(% 0)))); (ν 0 (µ 1 ((% 1)&(!#(% 0)))))].
 
 
 
@@ -324,21 +232,14 @@ Local Open Scope nat_scope.
 
 (** EqbSpec *)
 
-Instance : EqbSpec V.
-Proof.
-  red.
-  fix IH 1. destruct x as [v|n], y as [v'|n']; cbn; try cons.
- - case eqbspec; cons.
- - case eqbspec; cons.
-Qed.
-
 Instance eqbspec_formula: EqbSpec formula.
 Proof.
   red.
-  fix IH 1. induction x as [ | | | |V|Op F1 IH1 F2 IH2|Quant F IH']; destruct y eqn: Hy; 
+  fix IH 1. induction x as [ | | | |V|Op F1 IH1 F2 IH2|Quant n F IH']; destruct y eqn: Hy; 
   cbn; try cons; try (case eqbspec; cons).
   - case eqbspec; [ intros <- | cons ]. case IH1; try cons. case IH2; try cons.
-  - case eqbspec; [ intros <- | cons ]. case IH; cons. 
+  - case eqbspec; [ intros <- | cons ].
+    case IH'; intros; case eqbspec; try cons; intros; cons.
 Qed.
 
 Instance : EqbSpec context.
@@ -355,14 +256,14 @@ Qed.
 
 Lemma fsize_pos : forall (F:formula), 0 < fsize F.
 Proof.
-induction F ; simpl; intuition.
+  induction F ; simpl; intuition.
 Qed.
 
 (** Dual *)
 
 Lemma dual_inv : forall F, dual(dual F) = F.
 Proof.
-  intros. induction F as [ | | | |V|Op F1 IH1 F2 IH2|Quant F' IH]; intuition; try discriminate H.
+  intros. induction F as [ | | | |V|Op F1 IH1 F2 IH2|Quant n F' IH]; intuition; try discriminate H.
   + destruct Op; simpl; rewrite IH1, IH2; trivial.
   + destruct Quant; simpl; rewrite IH; trivial.
 Qed.
@@ -402,7 +303,7 @@ Proof.
   intros; destruct o; simpl; unfold not; intros; discriminate H.
 Qed.
 
-Lemma quant_dual : forall F q, Quant q F <> dual (Quant q F).
+Lemma quant_dual : forall F q n, Quant q n F <> dual (Quant q n F).
 Proof.
   intros; destruct q; simpl; unfold not; intros; discriminate H.
 Qed.
@@ -410,24 +311,12 @@ Qed.
 Lemma dual_var : forall F, F = dual F -> exists v, F = Var v.
 Proof.
   destruct F; intros; try discriminate H. 
-  - simpl in H; exists v; trivial.
+  - exists a; trivial.
   - destruct (op_dual F1 F2 o); assumption.
-  - destruct (quant_dual F q); assumption.
+  - destruct (quant_dual F q a); assumption.
 Qed.
 
 (** Level *)
-
-Lemma BClosed_quant: forall F q, BClosed (Quant q F) -> form_level F <= 1.
-Proof.
-  intros. unfold BClosed, level in H; simpl; simpl in H.
-  assert (forall n, Nat.pred n = 0 <-> n <= 1). 
-  { split; induction n; intro; trivial.
-    - constructor; trivial.
-    - simpl in H0; subst; trivial.
-    - inversion H0; subst; trivial; inversion H2; subst.
-  }
-  apply H0; assumption.
-Qed. 
 
 Lemma BClosed_op: forall (F1 F2: formula) (o:op), BClosed (Op o F1 F2) <-> (BClosed F1) /\ (BClosed F2).
 Proof.
@@ -437,146 +326,106 @@ Proof.
     try (discriminate H0).
    }
    apply Hloc in H; destruct H; split; assumption.
-   destruct H. unfold BClosed, level; simpl. rewrite H, H0; trivial.
-Qed.
-
-Lemma level_op: forall n (F1 F2: formula) (o:op), form_level (Op o F1 F2) <= n 
-                                                                                                    <->   
-                                                                  (form_level F1 <= n ) /\ (form_level F2 <= n).
-Proof.
-  split; intros.
-  - simpl in H. apply max_le in H; trivial.
-  - simpl; apply max_le; trivial.
-Qed.
-
-Lemma level_quant: forall F q n, form_level (Quant q F) <= n -> form_level F <= S n.
-Proof.
-  intros; simpl in H; apply le_pred_S in H; assumption.
-Qed.
-
-Lemma level_quant_eq: forall F q n, form_level (Quant q F) = n -> form_level F <= S n.
-Proof.
-  intros. eapply level_quant. erewrite H. trivial.
+   destruct H. unfold BClosed, level, form_level; simpl.
+   rewrite H, H0; trivial.
 Qed.
 
 (** BSubst *)
+
 Local Open Scope eqb_scope.
 
-Lemma level_bsubst n (f g:formula) :
- level f <= S n -> level g <= n ->
- level (f[[ %n := g ]]) <= n.
+Lemma level_bsubst_swap : forall F a b l1 l2,
+  form_level_rec F (l1++a::b::l2) = form_level_rec F (l1++b::a::l2).
 Proof.
-  revert n.
-  induction f; intros; try destruct v; cbn; auto with arith.
-  - destruct (n0 =? n) eqn:Heq.
-    + assumption.
-    + cbn in *. inversion H; subst.
-       -- apply Utils.eqb_neq in Heq; destruct Heq; trivial.
-       -- assumption.
-  - cbn in H; simpl in H; apply max_le in H; destruct H; apply max_le; split.
-    + apply IHf1; assumption.
-    + apply IHf2; assumption.
-  - unfold level in H; simpl in H. rewrite le_pred_S in H. apply IHf in H.
-    + apply le_pred_S; assumption.
-    + constructor; assumption.
+  induction F; simpl; trivial.
+  {
+  induction l1; simpl.
+    { destruct (a =? a0); destruct (a =? b); trivial. }
+    { destruct (a =? a1); trivial. }
+  }
+  {
+  intros.
+  rewrite IHF1, IHF2; trivial.
+  }
+  {
+  intros.
+  apply (IHF a0 b (a :: l1) l2).
+  }
 Qed.
 
-Lemma le_level_BSubst_unchanged : forall (G f: formula) n, 
-  form_level G <= n -> G[[ %n := f ]] = G.
+Local Open Scope list_scope.
+
+Lemma level_bsubst_swap_head :  forall F h l1 l2,
+  form_level_rec F (h::l1++l2) = form_level_rec F (l1++h::l2).
 Proof.
-  induction G; intros; try destruct v; try (inversion H0; reflexivity); cbn; simpl; trivial.
- - destruct (n0 =? n) eqn:Heq; try apply Utils.eqb_eq in Heq; subst; trivial; simpl in H; lia.
- -  apply max_le in H; destruct H;
-    try (rewrite (IHG1 _ n));
-    try (rewrite (IHG2 _ n)); try assumption;
-    trivial.
-- simpl in H;
-  rewrite (IHG f (S n)); trivial; apply le_pred_S in H; assumption.
+  intros. revert l2 h.
+  induction l1 using rev_ind; intros; simpl; trivial.
+  rewrite <- app_assoc, <- app_assoc.
+  rewrite IHl1.
+  apply level_bsubst_swap.
 Qed.
 
-Lemma le_level_BSubst : forall (G f:formula) k n1 n2, 
-  form_level G <= n1 -> form_level f <= n2 -> form_level (G[[ %k := f ]]) <= Nat.max n1 n2.
+Lemma level_bsubst_cons : forall F l1 l2,
+  form_level_rec F l1 = 0 -> form_level_rec F (l2 ++ l1) = 0.
 Proof.
-  induction G; intros; try destruct v; simpl; try apply le_0_n.
-  - unfold bsubst; simpl. 
-    destruct (le_max n1 n2).
-    destruct (n =? k);
-    eapply le_trans; try eassumption.
-  - simpl in H. apply max_le in H. destruct H. 
-    apply (IHG1 f k n1 n2) in H; try assumption.
-    apply (IHG2 f k n1 n2) in H1; try assumption.
-    destruct (le_max_bis (form_level (G1 [[ % k := f]])) (form_level (G2 [[ % k := f]]))).
-    -- apply (le_trans _ (form_level (G1 [[ % k := f]])) _); assumption.
-    -- apply (le_trans _ (form_level (G2 [[ % k := f]])) _); assumption.
-  - apply le_pred_S. rewrite (max_S n1 n2).
-    apply IHG; try assumption; apply (level_quant G q n1) in H; try assumption.
-    eapply le_trans; try eassumption; apply le_S; trivial.
+  induction F; simpl; trivial.
+  {
+  intros.
+  destruct (list_mem a l1) eqn:Heq1;
+  destruct (list_mem a (l2 ++ l1)) eqn:Heq2; trivial.
+  apply list_mem_in in Heq1.
+  assert (In a (l2 ++ l1)).
+  apply in_or_app; right; trivial.
+  apply list_mem_in in H0.
+  rewrite Heq2 in H0; discriminate H0.
+  }
+  {
+  intros. apply max_0 in H; destruct H;
+  rewrite IHF1, IHF2; trivial.
+  }
+  {
+  intros.
+  destruct (IHF (a::l1) l2); trivial.
+  apply level_bsubst_swap_head.
+  }
 Qed.
 
-Lemma eq_level_BSubst : forall (G f:formula) k n1 n2, 
-  form_level G = n1 -> form_level f = n2 -> form_level (G[[ %k := f ]]) <= Nat.max n1 n2.
+Lemma level_bsubst_lemma : forall F G n q l,
+  form_level_rec (Quant q n F) l = 0 -> form_level_rec G l = 0 
+  -> form_level_rec (F[[ %n := G ]]) l = 0.
 Proof.
-  intros; eapply le_level_BSubst; try eassumption; try rewrite H; try rewrite H0; trivial.
+  intros F G n q.
+  induction F; intros; trivial.
+  {
+  unfold bsubst; simpl; destruct (n =? a) eqn:Heq; trivial.
+  unfold level, form_level in H; simpl in H;
+  rewrite Utils.eqb_sym in H; rewrite Heq in H.
+  trivial.
+  }
+  {
+  unfold BClosed, level, form_level in H; simpl in H.
+  apply max_0 in H; destruct H; apply max_0; 
+  split; [apply IHF1|apply IHF2]; trivial.
+  }
+  {
+  unfold BClosed, level, form_level in H; simpl in H.
+  apply IHF.
+  {
+  simpl; rewrite <- (app_nil_l (n::a::l)), <- H.
+  apply (level_bsubst_swap F n a [] l).
+  }
+  {
+  apply (level_bsubst_cons G l [a]) in H0. apply H0.
+  }
+  }
 Qed.
 
-Lemma BClosed_bsubst: forall (F G: formula) k, 
-  BClosed F -> F [[ %k := G ]] = F.
+Lemma level_bsubst n q (F G:formula) :
+ BClosed (Quant q n F) -> BClosed G -> BClosed (F[[ %n := G ]]).
 Proof.
-  intros. apply (le_level_BSubst_unchanged F G _); rewrite H; apply le_0_n.
-Qed.
-
-Lemma BClosed_quant_bsubst : forall q (F G: formula),
-  BClosed G -> BClosed (Quant q F) ->  BClosed (F[[ %0 := G ]]).
-Proof.
-  intros. unfold BClosed in *. assert (forall n, n <= 0 <-> n = 0). 
-   { split; intros; subst; trivial; inversion H1; trivial. }
-   apply H1; apply H1 in H0. 
-   cbn in H0; apply le_pred_S in H0; apply level_bsubst; try assumption;
-   rewrite H; trivial.
-Qed.
-
-Lemma switch_BSubst : forall (F G H:formula) a b, 
-  BClosed G -> BClosed H -> a <> b -> ((F[[ %a := G ]]) [[ %b := H ]]) = ((F[[ %b := H ]]) [[ %a := G ]]).
-Proof.
-  induction F; try destruct v; unfold bsubst; simpl; intros; trivial.
-  - destruct (n =? a) eqn:Heqa; destruct (n =? b) eqn:Heqb; 
-    try rewrite Utils.eqb_eq in Heqa; try rewrite Utils.eqb_eq in Heqb.
-    + subst; destruct H2; trivial.
-    + subst; simpl; rewrite Utils.eqb_refl; apply BClosed_bsubst; trivial.
-    + subst; simpl; rewrite Utils.eqb_refl; symmetry; apply BClosed_bsubst; trivial.
-    + subst; simpl; rewrite Heqa, Heqb; trivial.
-  - rewrite IHF1, IHF2; trivial.
-  - rewrite IHF; intuition.
-Qed.
-
-Theorem bsubst_prop: forall P (f g:formula), 
-  (forall k, P (f[[%k := g]]) ) -> P f.
-Proof.
-  intros. assert (f [[ % level f := g]] = f). { rewrite le_level_BSubst_unchanged; trivial. }
-  rewrite <- H. apply X.
-Qed. 
-
-(** Boolean <-> Inductive *)
-
-
-Theorem FixBinders_is_IndBinders: forall n f, 
-  FixBinders f = n <-> IndBinders f n.
-Proof.
-  split; generalize dependent n; induction f; induction n; intros; 
-  try (constructor); try (discriminate H); try (inversion H; reflexivity).
-  - simpl in H; apply max_0 in H; destruct H; apply IHf1 in H; apply IHf2 in H0;
-    econstructor; try eassumption; trivial.
- - simpl in H. inversion H. destruct (le_max (FixBinders f1) (FixBinders f2)); 
-   apply max_eq in H. rewrite H1 in *. 
-   apply (CaseOp f1 f2 (FixBinders f1) (FixBinders f2) (S n) o). 
-   -- apply (IHf1 (FixBinders f1)); trivial.
-   -- apply (IHf2 (FixBinders f2)); trivial.
-   -- symmetry; assumption.
- - apply IHf; simpl in H; injection H as H; subst; trivial.
- - inversion H; subst. apply IHf1 in H3; apply IHf2 in H5.
-   simpl; subst; symmetry; assumption.
-- inversion H; subst; apply IHf1 in H3; apply IHf2 in H5; simpl; subst; symmetry; assumption.
-- inversion H; subst; apply IHf in H1; simpl; subst; trivial.
+  intros.
+  unfold BClosed, level, form_level.
+  apply (level_bsubst_lemma _ _ _ q []); trivial.
 Qed.
 
 
