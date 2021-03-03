@@ -42,7 +42,7 @@ Qed.
 
 (** Generic boolean equalities (via Coq Classes) *)
 
-Delimit Scope eqb_scope with eqb.
+Declare Scope eqb_scope.
 Local Open Scope eqb_scope.
 
 Class Eqb (A : Type) := eqb : A -> A -> bool.

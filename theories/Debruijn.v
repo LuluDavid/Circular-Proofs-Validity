@@ -5,6 +5,7 @@ Local Open Scope lazy_bool_scope.
 Local Open Scope string_scope.
 Local Open Scope eqb_scope.
 
+Create HintDb circular.
 (** DEFINITIONS *)
 
 (** Variables *)
@@ -43,9 +44,9 @@ Infix "⊗" := (Op And_mult) (at level 85, right associativity) : formula_scope.
 
 Notation "% n" := (Var n) (at level 20) : formula_scope.
 
-Notation "'µ'" := (Quant mu) (at level 200) : formula_scope.
+Notation "'µ'" := (Quant mu) (at level 20) : formula_scope.
 
-Notation "'ν'" := (Quant nu) (at level 200) : formula_scope.
+Notation "'ν'" := (Quant nu) (at level 20) : formula_scope.
 
 Local Open Scope formula_scope.
 Definition test := µ O Bot.
@@ -94,6 +95,8 @@ Arguments level {_} {_} !_.
 (** Some generic definitions based on the previous ones *)
 
 Definition BClosed {A}`{Level A} (a:A) := level a = 0.
+
+Hint Unfold BSubst Level BClosed : circular.
 
 Notation "f [[ % n := F ]]" := (bsubst n F f) (at level 150, right associativity) : formula_scope.
 

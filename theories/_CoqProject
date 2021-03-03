@@ -8,11 +8,10 @@ Utils.v
 Defs.v
 Debruijn.v
 Address.v
-# Occurrences.v
-# Derivations.v
-# Suboccurrences.v
-# TreePrelim.v
-# Subformulas.v
-# FLSuboccurrences.v
+Occurrences.v
+Derivations.v
+Suboccurrences.v
+Subformulas.v
+FLSuboccurrences.v
 # FLSubformulas.v
 # Traces.v

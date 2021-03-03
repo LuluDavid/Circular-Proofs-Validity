@@ -6,20 +6,22 @@
 
 Require Import Bool Orders Ascii AsciiOrder String.
 Local Open Scope string_scope.
+Create HintDb string.
 
 Inductive string_lt : string -> string -> Prop :=
  | LtEmpty a s : "" < String a s
  | LtHead a a' s s' : (a < a')%char -> String a s < String a' s'
  | LtTail a s s' : s < s' -> String a s < String a s'
 where "u < v" := (string_lt u v) : string_scope.
-Hint Constructors string_lt.
+
+Hint Constructors string_lt : string.
 
 Lemma string_lt_strorder : StrictOrder string_lt.
 Proof.
  split.
  - intros s. red. induction s; inversion_clear 1; auto.
    now apply ascii_lt_strorder in H0.
- - red. intros x y z H; revert z. induction H; inversion_clear 1; auto.
+ - red. intros x y z H; revert z. induction H; inversion_clear 1; auto with string.
    constructor. eapply ascii_lt_strorder; eauto.
 Qed.
 
@@ -50,9 +52,9 @@ Lemma string_compare_spec s s' :
  CompareSpec (s=s') (s<s') (s'<s) (s?=s').
 Proof.
  revert s'.
- induction s as [|a s IH]; destruct s' as [|a' s']; simpl; auto.
- case ascii_compare_spec; intros H; subst; simpl; auto.
- case IH; intros H; subst; auto.
+ induction s as [|a s IH]; destruct s' as [|a' s']; simpl; auto with string.
+ case ascii_compare_spec; intros H; subst; simpl; auto with string.
+ case IH; intros H; subst; auto with string.
 Qed.
 
 Definition string_eqb s s' :=

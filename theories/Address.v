@@ -60,7 +60,7 @@ Inductive sub_address_rev: address -> address -> Prop :=
   .
 
 Definition sub_address (a a': address) := sub_address_rev (rev a)(rev a').
-Hint Unfold sub_address.
+Hint Unfold sub_address : circular.
 
 Notation "a ⊑ b" := (sub_address a b) (at level 100). 
 
